@@ -113,17 +113,33 @@ def plane(z, cap, reglaje, mm_pe_px, lat_px: int = 480) -> bytes:
     pr = (Hm * na + Dm * nb) / nn
     sp = (-Hm * nb + Dm * na) / nn
 
+    # Conturul plăcii e mulţimea înălţimilor pe care felia chiar le atinge, nu
+    # intervalul dintre cea mai de sus şi cea mai de jos.
+    #
+    # Sub bărbie profilul intră înăuntru şi iese din nou la gât, deci o felie
+    # atinge două zone despărţite. Luate ca un singur interval, scobitura se
+    # umple şi placa acoperă tot ce e sub ea -- exact detaliul de la bărbie şi
+    # gât care dispărea. O placă adevărată ar avea acolo două bucăţi, sau una
+    # cu o crestătură; oricum, nu material plin.
     cap_px = inauntru > 0
+    sp_px = np.round(sp / esc).astype(np.int32)
+    baza_sp = int(sp_px.min())
+    n_sp = int(sp_px.max()) - baza_sp + 1
+    idx = sp_px - baza_sp
+
     metal = np.zeros(img.shape[:2], bool)
     k = float(proiectii.min())
     while k < proiectii.max():
-        felie = cap_px & (pr >= k / nn) & (pr < (k + reglaje.grosime_mm) / nn)
+        banda = (pr >= k / nn) & (pr < (k + reglaje.grosime_mm) / nn)
+        felie = cap_px & banda
         if felie.any():
-            # Conturul plăcii: cât se întinde tot ce cade în felie. Constant pe
-            # toată grosimea -- de aici dreptunghiul.
-            lo, hi = sp[felie].min(), sp[felie].max()
-            banda = (pr >= k / nn) & (pr < (k + reglaje.grosime_mm) / nn)
-            metal |= banda & (sp >= lo) & (sp <= hi)
+            acoperit = np.zeros(n_sp, bool)
+            acoperit[idx[felie]] = True
+            # Golurile de un pixel sunt zgomot de rasterizare, nu crestături.
+            acoperit = cv2.morphologyEx(acoperit.astype(np.uint8).reshape(-1, 1),
+                                        cv2.MORPH_CLOSE,
+                                        np.ones((3, 1), np.uint8)).ravel() > 0
+            metal |= banda & acoperit[idx]
         k += pas
 
     img[metal] = (150, 163, 176, 255)
