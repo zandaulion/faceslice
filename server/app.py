@@ -12,6 +12,7 @@ import io
 import json
 import os
 import secrets
+import shutil
 import zipfile
 from datetime import datetime, timedelta, timezone
 
@@ -278,7 +279,6 @@ def _ghid(placi, info, reg: Reglaje, rez: dict) -> str:
 @app.delete("/api/jobs/{jid}")
 def sterge(jid: str, dev: dict = Depends(dispozitiv)):
     _incarca(jid, dev)
-    import shutil
     shutil.rmtree(dosar_job(jid), ignore_errors=True)
     DB.execute("DELETE FROM jobs WHERE id=? AND device_id=?", (jid, dev["id"]))
     DB.commit()
@@ -286,6 +286,14 @@ def sterge(jid: str, dev: dict = Depends(dispozitiv)):
 
 
 # ---------------------------------------------------------------- administrare
+
+async def _corp(request: Request) -> dict:
+    """Corpul JSON, sau gol. Consola trimite uneori DELETE fără corp."""
+    try:
+        d = await request.json()
+        return d if isinstance(d, dict) else {}
+    except Exception:
+        return {}
 
 @app.get("/api/admin/devices", dependencies=[Depends(doar_admin)])
 def a_dispozitive():
@@ -295,9 +303,36 @@ def a_dispozitive():
 
 
 @app.post("/api/admin/devices/{did}/revoke", dependencies=[Depends(doar_admin)])
-def a_revoca(did: str):
-    DB.execute("UPDATE devices SET revoked=1 WHERE id=?", (did,)); DB.commit()
-    return {"ok": True}
+async def a_revoca(did: str, request: Request):
+    """Comutator, nu drum fără întoarcere.
+
+    Consola trimite starea dorită, fiindcă butonul ei se apasă în ambele
+    sensuri. Ignorând-o, un telefon revocat din greşeală rămânea revocat."""
+    d = await _corp(request)
+    revocat = 1 if d.get("revoked", True) else 0
+    DB.execute("UPDATE devices SET revoked=? WHERE id=?", (revocat, did)); DB.commit()
+    return {"id": did, "revoked": bool(revocat), "success": True}
+
+
+@app.post("/api/admin/devices/{did}/label", dependencies=[Depends(doar_admin)])
+async def a_eticheta(did: str, request: Request):
+    eticheta = (await _corp(request)).get("label") or None
+    DB.execute("UPDATE devices SET label=? WHERE id=?", (eticheta, did)); DB.commit()
+    return {"id": did, "label": eticheta, "success": True}
+
+
+@app.delete("/api/admin/devices/{did}", dependencies=[Depends(doar_admin)])
+def a_sterge_dispozitiv(did: str):
+    """Şterge dispozitivul şi tot ce a lăsat în urmă.
+
+    Lucrările sunt fişiere pe disc, nu doar rânduri: şterse doar din bază, ar
+    rămâne acolo pentru totdeauna, cu fotografia omului în ele."""
+    for r in DB.execute("SELECT id FROM jobs WHERE device_id=?", (did,)).fetchall():
+        shutil.rmtree(dosar_job(r["id"]), ignore_errors=True)
+    DB.execute("DELETE FROM jobs WHERE device_id=?", (did,))
+    DB.execute("DELETE FROM devices WHERE id=?", (did,))
+    DB.commit()
+    return {"deleted": did, "success": True}
 
 
 @app.get("/api/admin/invites", dependencies=[Depends(doar_admin)])
