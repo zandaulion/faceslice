@@ -84,8 +84,8 @@ def plane(z, cap, reglaje, mm_pe_px, lat_px: int = 480) -> bytes:
     for i in range(L):
         poli.append((int(22 + d[i] / esc), int(12 + i * mm_pe_px / esc)))
     poli.append((22, PH - 12))
-    # Capul se umple abia vizibil: e doar reperul în care stau plăcile.
-    cv2.fillPoly(img, [np.array(poli, np.int32)], (214, 205, 194, 60))
+    # Capul NU se umple. Numai plăcile au material; între ele trebuie să se
+    # vadă fundalul paginii, altfel golul arată tot a ceva.
 
     # Plăcile se desenează ca benzi de grosimea lor, nu ca linii.
     #
@@ -115,12 +115,29 @@ def plane(z, cap, reglaje, mm_pe_px, lat_px: int = 480) -> bytes:
     # Numai înăuntrul capului: benzile în afara siluetei n-ar însemna nimic.
     inauntru = np.zeros(img.shape[:2], np.uint8)
     cv2.fillPoly(inauntru, [np.array(poli, np.int32)], 255)
-    # Plinul e tablă, palidul e aer -- deosebirea se face din opacitate, nu
-    # din nuanţă: două tonuri apropiate pe acelaşi desen nu se disting.
-    img[(benzi > 0) & (inauntru > 0)] = (214, 205, 194, 255)
-    cv2.polylines(img, [np.array(poli, np.int32)], False,
-                  (120, 106, 92, 255), 2, cv2.LINE_AA)
+    # Tabla e plină şi de un ton închis; golul e fundalul gol al paginii.
+    #
+    # Prima încercare deosebea plinul de gol prin opacitate -- palid tare faţă
+    # de palid slab -- şi pe fundal deschis arătau identic. Deosebirea trebuie
+    # să fie între „material" şi „nimic", nu între două nuanţe ale aceleiaşi
+    # culori.
+    metal = (benzi > 0) & (inauntru > 0)
+    img[metal] = (150, 163, 176, 255)
+
+    # Muchia fiecărei plăci, ca să se vadă unde se desparte de vecina ei chiar
+    # şi când sunt lipite.
+    contur = metal.astype(np.uint8) - cv2.erode(metal.astype(np.uint8),
+                                                np.ones((3, 3), np.uint8))
+    img[contur > 0] = (96, 112, 128, 255)
+
+    # Muchia de început a fiecărei plăci, desenată şi înăuntru: când plăcile se
+    # ating -- fără sărituri -- conturul exterior nu mai arată despărţirile, iar
+    # teancul pare o singură bucată turnată în loc de cincisprezece tăiate.
+    # Dincolo de cap linia continuă palid, ca să se vadă unghiul felierii.
     for a1, a2 in taieturi:
-        cv2.line(img, a1, a2, (70, 130, 220, 255), 1, cv2.LINE_AA)
+        linie = np.zeros(img.shape[:2], np.uint8)
+        cv2.line(linie, a1, a2, 255, 1, cv2.LINE_AA)
+        img[(linie > 0) & metal] = (96, 112, 128, 255)
+        img[(linie > 0) & (inauntru == 0)] = (70, 130, 220, 110)
     ok, buf = cv2.imencode(".png", img)
     return buf.tobytes() if ok else b""
