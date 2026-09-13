@@ -130,6 +130,8 @@ const CURSOARE = {
   grosime: ['grosime_mm', (v) => `${(+v).toFixed(1)} mm`],
   adancime: ['adancime_mm', (v) => `${v} mm`],
   kerf: ['kerf_mm', (v) => `${(+v).toFixed(2)} mm`],
+  detaliu: ['detaliu', (v) => `${(+v).toFixed(2).replace(/0$/, '')}×`],
+  curba: ['curba', (v) => `${(+v).toFixed(2).replace(/0$/, '')}×`],
   inclinare: ['inclinare', (v) => `${v}°`],
   rotire: ['rotire', (v) => `${v}°`],
   sari: ['sari', (v) => (v === '1' ? '1 (toate)' : `1 din ${v}`)],

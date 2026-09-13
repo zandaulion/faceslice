@@ -30,10 +30,25 @@ INTRARE_ADANC = 518          # multiplu de 14, cum cere modelul
 # singurul lucru din fotografie a cărui mărime reală se poate afla fără riglă.
 DIP_IMPLICIT_MM = 63.0
 
+# Cât se amplifică relieful facial peste forma mare.
+#
+# Nu e un număr ales din ochi. Modelul monocular turteşte feţele -- pielea
+# n-are textură din care să deducă adâncime -- iar o fotografie din profil e o
+# măsurătoare directă: marginea din faţă a siluetei ESTE curba nasului. Măsurat
+# acolo, nasul iese cu 0,21 din cursa reliefului; netezind componentele separat, amestecul nepotenţat dă
+# 0,18, iar plasa singură 0,06. La ×1,5 amestecul dă fix 0,21.
+DETALIU_IMPLICIT = 1.5
+
 
 @dataclass
 class Reconstructie:
-    z: np.ndarray            # adâncime, mai mare = mai aproape de privitor
+    # Forma mare şi detaliul facial se ţin separat, nu însumate. Amestecul lor
+    # e un reglaj pe care omul îl vede pe ecran, iar recombinarea costă o
+    # adunare -- faţă de două secunde şi jumătate cât ar lua reconstrucţia din
+    # nou la fiecare mişcare de cursor.
+    baza: np.ndarray         # de la modelul monocular, potrivit la scara plasei
+    detaliu: np.ndarray      # relieful facial, ca abatere de la propria netezire
+    alfa: np.ndarray         # trecerea moale de la faţă spre restul capului
     cap: np.ndarray          # masca siluetei
     mm_pe_px: float
     dip_px: float
@@ -41,9 +56,18 @@ class Reconstructie:
     inaltime_cap_mm: float
     relief_mm: float
 
+    def combina(self, detaliu_x: float = DETALIU_IMPLICIT) -> np.ndarray:
+        z = self.baza + detaliu_x * self.alfa * self.detaliu
+        return np.where(self.cap, z, np.nan)
+
+    @property
+    def z(self) -> np.ndarray:
+        return self.combina()
+
     def rezumat(self) -> dict:
         d = asdict(self)
-        d.pop("z"); d.pop("cap")
+        for k in ("baza", "detaliu", "alfa", "cap"):
+            d.pop(k)
         return {k: (round(v, 2) if isinstance(v, float) else v) for k, v in d.items()}
 
 
@@ -188,19 +212,24 @@ def reconstruieste(bgr: np.ndarray, dip_mm: float = DIP_IMPLICIT_MM,
     alfa = cv2.GaussianBlur(fata.astype(np.float64), (61, 61), 0)
     alfa = np.clip((alfa - 0.25) / 0.5, 0, 1)
 
-    z = baza + alfa * detaliu
-    zf = np.where(np.isnan(z), 0, z)
+    # Netezire uşoară: marginea segmentării are zimţi de un pixel. Se aplică
+    # separat pe fiecare componentă, ca suma lor să rămână netedă oricât s-ar
+    # amplifica detaliul.
     m = cap.astype(np.float64)
-    zf = cv2.GaussianBlur(zf, (9, 9), 0)
     mf = cv2.GaussianBlur(m, (9, 9), 0)
-    z = np.where(cap, np.divide(zf, mf, out=np.zeros_like(zf), where=mf > 1e-6), np.nan)
+    def _neteste(v):
+        vb = cv2.GaussianBlur(np.where(cap, v, 0.0), (9, 9), 0)
+        return np.divide(vb, mf, out=np.zeros_like(vb), where=mf > 1e-6)
+    baza, detaliu = _neteste(baza), _neteste(detaliu)
 
     mm_pe_px = dip_mm / dip_px
+    z = np.where(cap, baza + DETALIU_IMPLICIT * alfa * detaliu, np.nan)
     xs = np.where(cap.any(axis=0))[0]
     ys = np.where(cap.any(axis=1))[0]
     lo, hi = np.percentile(z[cap], [0.5, 99.8])
     return Reconstructie(
-        z=z, cap=cap, mm_pe_px=mm_pe_px, dip_px=dip_px,
+        baza=baza, detaliu=detaliu, alfa=alfa, cap=cap,
+        mm_pe_px=mm_pe_px, dip_px=dip_px,
         latime_cap_mm=float(np.ptp(xs) * mm_pe_px),
         inaltime_cap_mm=float(np.ptp(ys) * mm_pe_px),
         relief_mm=float((hi - lo) * mm_pe_px))

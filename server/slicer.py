@@ -29,7 +29,11 @@ class Reglaje:
     goleste: bool = True
     margine_mm: float = 12.0       # suprapunerea de lipire
     kerf_mm: float = 0.2
-    curba: float = 0.75            # <1 păstrează relieful feţei la comprimare
+    # Peste 1 dă feţei mai mult din adâncime; sub 1 o dă cefei. Era 0,75, cu
+    # un comentariu care promitea exact pe dos -- iar din douăzeci de plăci
+    # doar patru prindeau faţa şi şapte ieşeau aproape goale. Dintr-o poză din
+    # faţă ceafa oricum e ghicită, nu văzută: nu merită jumătate din material.
+    curba: float = 2.0
     netezire: float = 1.2          # mm; marginea segmentării e zimţată
 
 

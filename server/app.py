@@ -94,7 +94,10 @@ async def lucrare_noua(foto: UploadFile = File(...),
     jid = secrets.token_hex(8)
     d = dosar_job(jid)
     cv2.imwrite(os.path.join(d, "foto.jpg"), img, [cv2.IMWRITE_JPEG_QUALITY, 88])
-    np.savez_compressed(os.path.join(d, "relief.npz"), z=rec.z.astype(np.float32),
+    np.savez_compressed(os.path.join(d, "relief.npz"),
+                        baza=rec.baza.astype(np.float32),
+                        detaliu=rec.detaliu.astype(np.float32),
+                        alfa=rec.alfa.astype(np.float32),
                         cap=rec.cap, mm_pe_px=rec.mm_pe_px)
     rez = rec.rezumat()
     DB.execute("INSERT INTO jobs (id, device_id, created_at, nume, rezumat, reglaje)"
@@ -114,15 +117,20 @@ def lucrari(dev: dict = Depends(dispozitiv)):
              "rezumat": json.loads(r["rezumat"] or "{}")} for r in rows]
 
 
-def _incarca(jid: str, dev: dict):
+def _incarca(jid: str, dev: dict, detaliu_x: float = pipeline.DETALIU_IMPLICIT):
+    """Adâncimea, recompusă cu amplificarea cerută.
+
+    Componentele stau separat pe disc tocmai ca amestecul să fie un reglaj:
+    schimbarea lui costă o adunare, nu o reconstrucţie de două secunde."""
     r = DB.execute("SELECT * FROM jobs WHERE id=? AND device_id=?",
                    (jid, dev["id"])).fetchone()
     if not r:
         raise HTTPException(404, "Lucrarea nu există.")
     f = np.load(os.path.join(dosar_job(jid), "relief.npz"))
-    z = f["z"].astype(np.float64)
-    z[~f["cap"]] = np.nan
-    return r, z, f["cap"], float(f["mm_pe_px"])
+    cap = f["cap"]
+    z = f["baza"].astype(np.float64) + detaliu_x * f["alfa"] * f["detaliu"]
+    z[~cap] = np.nan
+    return r, z, cap, float(f["mm_pe_px"])
 
 
 @app.get("/api/jobs/{jid}/foto")
@@ -146,13 +154,15 @@ def _reglaje(d: dict) -> Reglaje:
 
 @app.post("/api/jobs/{jid}/previzualizare")
 async def previzualizare(jid: str, request: Request, dev: dict = Depends(dispozitiv)):
-    reg = _reglaje(await request.json())
-    _, z, cap, mm = _incarca(jid, dev)
+    d = await request.json()
+    detaliu_x = float(np.clip(float(d.pop("detaliu", pipeline.DETALIU_IMPLICIT)), 0.0, 5.0))
+    reg = _reglaje(d)
+    _, z, cap, mm = _incarca(jid, dev, detaliu_x)
     placi, info = Solid(z, cap, mm).felieaza(reg)
     if not placi:
         raise HTTPException(422, "Reglajele nu produc nicio placă.")
     DB.execute("UPDATE jobs SET reglaje=? WHERE id=?",
-               (json.dumps(reg.__dict__), jid))
+               (json.dumps(reg.__dict__ | {"detaliu": detaliu_x}), jid))
     DB.commit()
 
     import base64
@@ -173,8 +183,12 @@ async def previzualizare(jid: str, request: Request, dev: dict = Depends(dispozi
 @app.get("/api/jobs/{jid}/dxf")
 def descarca(jid: str, request: Request, coala_w: float = 1000, coala_h: float = 500,
              dev: dict = Depends(dispozitiv)):
-    r, z, cap, mm = _incarca(jid, dev)
-    reg = _reglaje(json.loads(r["reglaje"] or "{}"))
+    salvate = json.loads(r0["reglaje"] or "{}") if (r0 := DB.execute(
+        "SELECT reglaje FROM jobs WHERE id=? AND device_id=?",
+        (jid, dev["id"])).fetchone()) else {}
+    detaliu_x = float(salvate.pop("detaliu", pipeline.DETALIU_IMPLICIT))
+    r, z, cap, mm = _incarca(jid, dev, detaliu_x)
+    reg = _reglaje(salvate)
     placi, info = Solid(z, cap, mm).felieaza(reg)
     coala = dxfmod.Coala(latime_mm=coala_w, inaltime_mm=coala_h)
     fisiere = dxfmod.exporta(placi, coala)
