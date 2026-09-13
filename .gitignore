@@ -1,0 +1,11 @@
+.venv/
+__pycache__/
+*.pyc
+data/
+photos/
+# Modelele se descarcă, nu se versionează: 114 MB de greutăţi care nu sunt
+# codul nostru. Vezi README pentru adrese.
+models/
+# Ieşiri de probă din explorarea de la început.
+out_*.png
+*.npy

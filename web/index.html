@@ -1,0 +1,135 @@
+<!doctype html>
+<html lang="ro">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#4E6A57" />
+<title>Faceslice — portret în straturi</title>
+<link rel="manifest" href="/manifest.webmanifest" />
+<link rel="icon" href="/icons/icon.svg" type="image/svg+xml" />
+<link rel="stylesheet" href="/app.css" />
+</head>
+<body>
+
+<header class="bara">
+  <div class="bara-int">
+    <div class="marca">
+      <img src="/icons/icon.svg" alt="" class="marca-ico" />
+      <div>
+        <div class="marca-nume">Faceslice</div>
+        <div class="marca-sub">portret în straturi, de tăiat</div>
+      </div>
+    </div>
+    <button id="insigna" class="insigna">…</button>
+  </div>
+</header>
+
+<main id="continut" class="container"></main>
+
+<!-- Poarta de acces -->
+<template id="sablon-poarta">
+  <div class="card">
+    <h2>Ai nevoie de o invitaţie</h2>
+    <p class="mut">Introdu codul primit, ca să înregistrezi acest dispozitiv.</p>
+    <input id="cod" class="camp" placeholder="ABCD-EFGH-JKLM" autocomplete="off" />
+    <button id="btn-revendica" class="btn btn-primar">Activează</button>
+    <p id="eroare-poarta" class="eroare"></p>
+  </div>
+</template>
+
+<!-- Pasul 1: fotografia -->
+<template id="sablon-foto">
+  <div class="card">
+    <h2>1 · Fotografia</h2>
+    <p class="mut">O poză din faţă, cu faţa dreaptă şi lumină uniformă.
+      Fără ochelari de soare, fără păr peste frunte.</p>
+
+    <label class="zona" id="zona">
+      <input type="file" id="fisier" accept="image/*" hidden />
+      <div class="zona-int">
+        <div class="zona-ico">📷</div>
+        <div><strong>Alege o fotografie</strong></div>
+        <div class="mut mic">sau trage una aici</div>
+      </div>
+    </label>
+
+    <div class="rand">
+      <label class="bifa"><input type="checkbox" id="oglindit" />
+        <span>Făcută cu camera frontală <span class="mut mic">(se întoarce)</span></span></label>
+    </div>
+    <div class="rand">
+      <label class="bifa"><input type="checkbox" id="cu-gat" />
+        <span>Include gâtul</span></label>
+    </div>
+
+    <div class="camp-rand">
+      <label for="dip">Distanţa dintre pupile</label>
+      <div><input type="number" id="dip" class="camp mic-camp" value="63" min="45" max="80"
+        step="0.5" /> <span class="mut">mm</span></div>
+    </div>
+    <p class="mut mic">Singura măsurătoare de care am nevoie, ca obiectul să iasă la
+      mărimea reală. 63 mm e media adulţilor; măsoar-o dacă vrei precizie.</p>
+
+    <button id="btn-trimite" class="btn btn-primar" disabled>Reconstruieşte</button>
+    <p id="eroare-foto" class="eroare"></p>
+    <div id="lucrari"></div>
+  </div>
+</template>
+
+<!-- Pasul 2: reglaje -->
+<template id="sablon-reglaje">
+  <div class="card">
+    <div class="cap-card">
+      <h2>2 · Reglaje</h2>
+      <button id="btn-inapoi" class="btn btn-mic">← altă fotografie</button>
+    </div>
+    <div class="previz">
+      <figure><img id="img-asamblat" alt="Cum arată asamblat" /><figcaption>asamblat</figcaption></figure>
+      <figure><img id="img-plane" alt="Unde cad planele de tăiere" /><figcaption>planele de tăiere</figcaption></figure>
+    </div>
+    <div id="sumar" class="sumar"></div>
+  </div>
+
+  <div class="card">
+    <h3>Material şi mărime</h3>
+    <div class="cursor"><label>Grosimea tablei <b id="v-grosime">3.0 mm</b></label>
+      <input type="range" id="grosime" min="0.5" max="10" step="0.5" value="3" /></div>
+    <div class="cursor"><label>Adâncimea reliefului <b id="v-adancime">60 mm</b></label>
+      <input type="range" id="adancime" min="15" max="150" step="5" value="60" /></div>
+    <div class="cursor"><label>Kerf <b id="v-kerf">0.20 mm</b></label>
+      <input type="range" id="kerf" min="0" max="1.5" step="0.05" value="0.2" /></div>
+
+    <h3>Felierea</h3>
+    <div class="cursor"><label>Înclinare <b id="v-inclinare">0°</b></label>
+      <input type="range" id="inclinare" min="-90" max="90" step="5" value="0" /></div>
+    <div class="cursor"><label>Rotire <b id="v-rotire">0°</b></label>
+      <input type="range" id="rotire" min="-90" max="90" step="5" value="0" /></div>
+    <div class="cursor"><label>Din câte straturi păstrez unul <b id="v-sari">1 (toate)</b></label>
+      <input type="range" id="sari" min="1" max="4" step="1" value="1" /></div>
+
+    <h3>Economie</h3>
+    <div class="rand">
+      <label class="bifa"><input type="checkbox" id="goleste" checked />
+        <span>Goleşte plăcile <span class="mut mic">(scoate ce nu se vede)</span></span></label>
+    </div>
+    <div class="cursor"><label>Marginea de lipire <b id="v-margine">12 mm</b></label>
+      <input type="range" id="margine" min="4" max="40" step="1" value="12" /></div>
+  </div>
+
+  <div class="card">
+    <h3>3 · Export</h3>
+    <div class="camp-rand">
+      <label>Coala de tablă</label>
+      <div><input type="number" id="coala-w" class="camp mic-camp" value="1000" />
+        × <input type="number" id="coala-h" class="camp mic-camp" value="500" />
+        <span class="mut">mm</span></div>
+    </div>
+    <button id="btn-dxf" class="btn btn-primar">Descarcă DXF</button>
+    <p class="mut mic">Un fişier pe coală, plus ghidul de montaj. Conturul plăcii
+      următoare e gravat pe fiecare placă — aceea e alinierea.</p>
+  </div>
+</template>
+
+<script type="module" src="/app.js"></script>
+</body>
+</html>

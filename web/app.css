@@ -1,0 +1,180 @@
+/* Faceslice — paleta ilustraţiilor: hârtie crem, cerneală brună, salvie,
+   teracotă. Aceleaşi culori ca iconiţa, ca aplicaţia să pară de-un neam. */
+
+:root {
+  --hartie: #F5EFE3;
+  --sus: #FFFFFF;
+  --sus-2: #EFE8DA;
+  --text: #3B342C;
+  --mut: #7C7264;
+  --linie: #DED5C4;
+  --linie-tare: #C6BBA6;
+  --salvie: #4E6A57;
+  --salvie-clar: #6B8A74;
+  --teracota: #C97F5F;
+  --umbra: 0 2px 10px rgba(70, 58, 44, 0.07);
+  --raza: 14px;
+  --jos: env(safe-area-inset-bottom, 0px);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --hartie: #16181A;
+    --sus: #1D2124;
+    --sus-2: #252A2E;
+    --text: #E8E3D8;
+    --mut: #9A9184;
+    --linie: #2F353A;
+    --linie-tare: #434B52;
+    --salvie: #7FA98B;
+    --salvie-clar: #9BBFA4;
+    --teracota: #D89475;
+    --umbra: 0 2px 12px rgba(0, 0, 0, 0.35);
+  }
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font: 15px/1.55 system-ui, -apple-system, "Segoe UI", sans-serif;
+  background: var(--hartie);
+  color: var(--text);
+  padding-bottom: calc(28px + var(--jos));
+  -webkit-font-smoothing: antialiased;
+}
+
+.bara {
+  position: sticky; top: 0; z-index: 40;
+  background: var(--sus);
+  border-bottom: 1px solid var(--linie);
+  padding: 10px 16px;
+}
+.bara-int {
+  max-width: 720px; margin: 0 auto;
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+}
+.marca { display: flex; align-items: center; gap: 10px; }
+.marca-ico { width: 34px; height: 34px; border-radius: 9px; }
+.marca-nume { font-weight: 700; letter-spacing: -0.01em; }
+.marca-sub { font-size: 0.74rem; color: var(--mut); }
+
+.insigna {
+  border: 1px solid var(--linie-tare); background: var(--sus-2);
+  color: var(--mut); border-radius: 999px; padding: 6px 13px;
+  font: inherit; font-size: 0.8rem; cursor: pointer;
+}
+
+.container { max-width: 720px; margin: 0 auto; padding: 18px 16px; }
+
+.card {
+  background: var(--sus); border: 1px solid var(--linie);
+  border-radius: var(--raza); box-shadow: var(--umbra);
+  padding: 18px; margin-bottom: 16px;
+}
+.cap-card { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+h2 { font-size: 1.12rem; margin-bottom: 4px; letter-spacing: -0.01em; }
+h3 { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.06em;
+     color: var(--mut); margin: 20px 0 10px; }
+h3:first-of-type { margin-top: 6px; }
+.mut { color: var(--mut); }
+.mic { font-size: 0.82rem; }
+.eroare { color: var(--teracota); font-size: 0.86rem; margin-top: 10px; }
+.eroare:empty { display: none; }
+
+.btn {
+  display: block; width: 100%; margin-top: 14px;
+  padding: 12px 16px; border: none; border-radius: 11px;
+  font: inherit; font-weight: 600; cursor: pointer;
+  background: var(--sus-2); color: var(--text);
+  transition: opacity 0.15s ease;
+}
+.btn-primar { background: var(--salvie); color: #FFF; }
+.btn:disabled { opacity: 0.45; cursor: default; }
+.btn-mic { width: auto; margin: 0; padding: 6px 12px; font-size: 0.82rem;
+           background: var(--sus-2); border: 1px solid var(--linie); }
+
+.camp {
+  width: 100%; padding: 11px 13px; font: inherit;
+  border: 1px solid var(--linie-tare); border-radius: 10px;
+  background: var(--hartie); color: var(--text); margin-top: 10px;
+}
+.mic-camp { width: 92px; display: inline-block; margin: 0; text-align: right; }
+.camp-rand {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; margin-top: 14px; font-size: 0.9rem;
+}
+
+.zona {
+  display: block; margin-top: 14px; padding: 26px 16px;
+  border: 2px dashed var(--linie-tare); border-radius: var(--raza);
+  text-align: center; cursor: pointer; background: var(--hartie);
+}
+.zona.activ { border-color: var(--salvie); background: var(--sus-2); }
+.zona-ico { font-size: 1.7rem; margin-bottom: 6px; }
+.zona img { max-width: 100%; border-radius: 10px; display: block; margin: 0 auto; }
+
+.rand { margin-top: 12px; }
+.bifa { display: flex; align-items: center; gap: 9px; cursor: pointer; font-size: 0.9rem; }
+.bifa input { width: 17px; height: 17px; accent-color: var(--salvie); }
+
+.cursor { margin-top: 15px; }
+.cursor label {
+  display: flex; justify-content: space-between; align-items: baseline;
+  font-size: 0.88rem; margin-bottom: 7px;
+}
+.cursor b { font-variant-numeric: tabular-nums; color: var(--salvie); }
+.cursor input[type=range] { width: 100%; accent-color: var(--salvie); }
+
+.previz {
+  display: grid; grid-template-columns: 1.6fr 1fr; gap: 12px; margin-top: 14px;
+}
+.previz figure {
+  background: var(--hartie); border: 1px solid var(--linie);
+  border-radius: 11px; padding: 8px; overflow: hidden;
+}
+.previz img { width: 100%; display: block; border-radius: 6px; }
+.previz figcaption {
+  font-size: 0.72rem; color: var(--mut); text-align: center; margin-top: 6px;
+}
+
+.sumar {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(108px, 1fr));
+  gap: 8px; margin-top: 14px;
+}
+.sumar div {
+  background: var(--hartie); border: 1px solid var(--linie);
+  border-radius: 10px; padding: 9px 11px;
+}
+.sumar .et { font-size: 0.7rem; color: var(--mut); text-transform: uppercase;
+             letter-spacing: 0.05em; }
+.sumar .va { font-weight: 700; font-variant-numeric: tabular-nums; margin-top: 2px; }
+
+.lista { margin-top: 18px; border-top: 1px solid var(--linie); padding-top: 12px; }
+.lista-el {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--linie);
+  font-size: 0.88rem; cursor: pointer;
+}
+.lista-el:last-child { border-bottom: none; }
+
+.lucreaza { text-align: center; color: var(--mut); padding: 22px; font-size: 0.9rem; }
+.lucreaza::after {
+  content: ''; display: block; width: 22px; height: 22px; margin: 12px auto 0;
+  border: 2px solid var(--linie-tare); border-top-color: var(--salvie);
+  border-radius: 50%; animation: rot 0.8s linear infinite;
+}
+@keyframes rot { to { transform: rotate(360deg); } }
+
+@media (prefers-reduced-motion: reduce) {
+  .lucreaza::after { animation: none; }
+}
+
+@media (max-width: 560px) {
+  .previz { grid-template-columns: 1fr; }
+}
+
+/* Ecran lat: cadrul se strânge la lăţimea conţinutului în loc să se întindă. */
+@media (min-width: 1000px) {
+  .container { max-width: 860px; }
+  .previz { grid-template-columns: 1.5fr 1fr; }
+}
