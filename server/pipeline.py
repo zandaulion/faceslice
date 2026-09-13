@@ -30,11 +30,17 @@ INTRARE_ADANC = 518          # multiplu de 14, cum cere modelul
 # singurul lucru din fotografie a cărui mărime reală se poate afla fără riglă.
 DIP_IMPLICIT_MM = 63.0
 
-# Cât din gât intră în bust, sub bărbie, şi cât de lată e banda păstrată faţă
-# de lăţimea capului. Gâtul unui adult e vreo jumătate din lăţimea capului; 0,62
-# lasă loc pentru maxilar şi muşchii laterali fără să prindă umărul.
-GAT_MM = 45.0
-GAT_LATIME = 0.62
+# Cât din bust intră sub bărbie, şi cât de lat are voie să fie pe parcurs.
+#
+# Limita creşte de la gât spre bază, ca un bust adevărat care se deschide spre
+# umeri. Nu e o formă impusă, ci un plafon: unde masca de piele e mai îngustă --
+# o poză în care umărul se vede întreg, cu haine -- se ia conturul adevărat.
+# Plafonul lucrează doar acolo unde realitatea lipseşte, iar asta se întâmplă
+# des: pe poza de probă umerii ies din cadru chiar de la nivelul bărbiei, deci
+# masca e un dreptunghi cât fotografia, nu un umăr.
+GAT_MM = 55.0
+GAT_LAT_SUS = 0.55      # la bărbie, faţă de lăţimea capului
+GAT_LAT_JOS = 1.05      # la bază
 
 # Cât se amplifică relieful facial peste forma mare.
 #
@@ -248,14 +254,33 @@ def _silueta(img: np.ndarray, cu_gat: bool = True,
     xs = np.where(doar_cap.any(axis=0))[0]
     barbie = int(ys.max())
     taietura = min(barbie + int(GAT_MM / max(mm_pe_px, 1e-6)), img.shape[0] - 1)
-    centru, latime = (xs.min() + xs.max()) / 2.0, float(np.ptp(xs))
+    centru = (xs.min() + xs.max()) / 2.0
+    latime = float(np.ptp(xs))
+    if taietura <= barbie:
+        return doar_cap.astype(np.uint8), doar_cap
 
-    banda = np.zeros_like(doar_cap)
-    lo = max(int(centru - GAT_LATIME * latime / 2), 0)
-    hi = min(int(centru + GAT_LATIME * latime / 2), img.shape[1])
-    banda[:taietura + 1, lo:hi] = True
+    piele = (cat == 2)
+    gat = np.zeros_like(doar_cap)
+    for y in range(barbie - int(0.10 * latime), taietura + 1):
+        if y < 0 or y >= piele.shape[0]:
+            continue
+        t = np.clip((y - barbie) / (taietura - barbie), 0.0, 1.0)
+        jum = (GAT_LAT_SUS + (GAT_LAT_JOS - GAT_LAT_SUS) * t ** 1.6) * latime / 2
 
-    gat = (cat == 2) & banda
+        # Se ia banda de piele care conţine axa capului, nu toată pielea de pe
+        # rând: altfel o mână ridicată lângă obraz s-ar lipi de bust.
+        rand = piele[y]
+        c = int(round(centru))
+        if not rand[min(max(c, 0), len(rand) - 1)]:
+            continue
+        st = c
+        while st > 0 and rand[st - 1]:
+            st -= 1
+        dr = c
+        while dr < len(rand) - 1 and rand[dr + 1]:
+            dr += 1
+        gat[y, max(st, int(centru - jum)):min(dr + 1, int(centru + jum) + 1)] = True
+
     return _curata(doar_cap | gat), doar_cap
 
 
