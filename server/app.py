@@ -103,10 +103,15 @@ async def lucrare_noua(foto: UploadFile = File(...),
         if date_p:
             if len(date_p) > MAX_FOTO:
                 raise HTTPException(413, "A doua fotografie e prea mare.")
+            # A doua poză nu poate opri lucrarea. Prima ajunge; asta doar
+            # ridică precizia, iar când nu poate, se spune şi se merge mai
+            # departe. Un refuz aici ar fi însemnat să pierzi şi reconstrucţia
+            # deja făcută, din cauza unei poze opţionale.
             try:
                 calibrare = profil.calibreaza(rec, _citeste_foto(date_p))
             except profil.ProfilNepotrivit as e:
-                raise HTTPException(422, str(e))
+                calibrare = profil.Calibrare(1.0, 0.0, 0.0, 0.0,
+                                             folosita=False, motiv=str(e))
 
     jid = secrets.token_hex(8)
     d = dosar_job(jid)
@@ -117,11 +122,14 @@ async def lucrare_noua(foto: UploadFile = File(...),
                         alfa=rec.alfa.astype(np.float32),
                         cap=rec.cap, mm_pe_px=rec.mm_pe_px)
     rez = rec.rezumat()
-    rez["detaliu"] = calibrare.factor if calibrare else pipeline.DETALIU_IMPLICIT
-    rez["calibrat"] = calibrare is not None
+    reusit = bool(calibrare and calibrare.folosita)
+    rez["detaliu"] = calibrare.factor if reusit else pipeline.DETALIU_IMPLICIT
+    rez["calibrat"] = reusit
     rez["cu_gat"] = cu_gat
     if calibrare:
         rez["calibrare"] = calibrare.rezumat()
+        if not reusit:
+            rez["calibrare_motiv"] = calibrare.motiv
     DB.execute("INSERT INTO jobs (id, device_id, created_at, nume, rezumat, reglaje)"
                " VALUES (?,?,?,?,?,?)",
                (jid, dev["id"], acum(), foto.filename or "portret",

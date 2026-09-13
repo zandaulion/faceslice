@@ -311,6 +311,12 @@ function ecranReglaje() {
       `${c.nas_dedus_mm.toFixed(1)} mm, deci relieful se ridică de ` +
       `${c.factor.toFixed(2)} ori. Valoarea e a ta şi a aparatului cu care ai pozat.`;
     nota.hidden = false;
+  } else if (rez.calibrare_motiv) {
+    nota.innerHTML =
+      `<strong>A doua poză n-a putut fi folosită.</strong> ${rez.calibrare_motiv} ` +
+      `Portretul e gata oricum — adâncimea feţei foloseşte valoarea medie ` +
+      `(${(rez.detaliu || 1.5).toFixed(2)}×), pe care o poţi muta din cursor.`;
+    nota.hidden = false;
   } else {
     nota.innerHTML =
       `<strong>Fără poză din profil.</strong> Adâncimea feţei foloseşte o ` +

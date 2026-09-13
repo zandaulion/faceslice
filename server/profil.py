@@ -32,21 +32,16 @@ import pipeline
 # profil nu. Între ele stau sprânceana, şaua nasului, vârful şi buzele.
 FEREASTRA = (0.45, 1.25)
 
-# Cât de asimetrică trebuie să fie silueta ca să fie un profil. O faţă din faţă
-# are ambele laturi la fel de netede; una din profil are ceafa netedă şi
-# cealaltă latură cu nas, buze şi bărbie. Raportul dintre cele două curburi
-# desparte cele două cazuri fără să aibă nevoie de puncte faciale -- care
-# oricum nu se detectează pe un profil adevărat.
-ASIMETRIE_MIN = 1.6
+# Cât de decentrată trebuie să fie pielea feţei faţă de mijlocul siluetei ca
+# poza să fie din lateral. Măsurat: un profil adevărat dă 0,11, o poză din trei
+# sferturi 0,07, iar cele frontale 0,01. Pragul e jos dinadins -- nu mai refuză
+# nimic, doar alege latura pe care e faţa.
+DECENTRARE_MIN = 0.03
 
-# Cât trebuie să iasă nasul din adâncimea capului ca poza să fie un profil.
-# Anatomic, vreo 22 mm dintr-un cap de 195 -- adică 0,11. Măsurat pe poze: un
-# profil adevărat dă 0,14, iar o poză din faţă, una din trei sferturi şi una
-# cu creştetul dau 0,02, 0,07 şi 0,007. Pragul separă cazurile cu marjă.
-#
-# Asimetria singură nu ajunge: creştetul fotografiat de sus a ieşit 9,1, cel
-# mai asimetric din tot lotul, fiindcă o latură era tăiată de cadru.
-NAS_MIN_RELATIV = 0.09
+# Sub atât, cele două profile nu descriu acelaşi cap şi calibrarea nu se
+# aplică. Nu e o respingere: lucrarea merge mai departe cu valoarea medie, şi
+# se spune de ce.
+POTRIVIRE_MIN = 0.30
 
 # Factorul rămâne în limite omeneşti. Peste ele, mai degrabă s-a greşit poza
 # decât are omul un nas de trei ori cât se credea.
@@ -63,9 +58,13 @@ class Calibrare:
     potrivire: float         # cât de bine se suprapun formele, 0..1
     nas_masurat_mm: float    # proeminenţa nasului din profil
     nas_dedus_mm: float      # cât ieşea din poza frontală, nepotenţat
+    folosita: bool = True    # dacă a doua poză a putut fi folosită
+    motiv: str = ""          # şi, dacă nu, de ce
 
     def rezumat(self) -> dict:
-        return {k: round(v, 3) for k, v in self.__dict__.items()}
+        return {k: (round(v, 3) if isinstance(v, (int, float))
+                    and not isinstance(v, bool) else v)
+                for k, v in self.__dict__.items()}
 
 
 def _margine(masca: np.ndarray, dreapta: bool, n: int = 240) -> np.ndarray:
@@ -81,20 +80,25 @@ def _margine(masca: np.ndarray, dreapta: bool, n: int = 240) -> np.ndarray:
     return np.interp(np.linspace(0, 1, n), np.linspace(0, 1, len(m)), m)
 
 
-def _fata_si_asimetrie(masca: np.ndarray) -> tuple[np.ndarray, float]:
-    """Latura cu relief e faţa; ceafa e netedă.
+def _latura_fetei(piele: np.ndarray, silueta: np.ndarray) -> bool | None:
+    """Încotro priveşte omul, după unde stă pielea feţei.
 
-    Ambele curburi se împart la aceeaşi adâncime a capului. Împărţită fiecare
-    la propria cursă, o ceafă aproape dreaptă ar ieşi infinit de zbuciumată --
-    exact latura greşită."""
-    laturi = {d: _margine(masca, d) for d in (True, False)}
-    adanc = max(np.ptp(c) for c in laturi.values())
-    if adanc < 1e-6:
-        raise ProfilNepotrivit("Silueta din a doua poză e plată.")
-    scor = {d: float(np.abs(np.diff(c, 2)).sum() / adanc) for d, c in laturi.items()}
-    d = max(scor, key=scor.get)
-    slab = min(scor.values())
-    return laturi[d], (scor[d] / slab if slab > 1e-9 else np.inf)
+    Prima variantă alegea latura după cât de zbuciumat e conturul, presupunând
+    că ceafa e netedă şi faţa nu. Pe păr creţ sau lung presupunerea cade --
+    părul e cel mai zbuciumat lucru din poză, şi ajungeam să măsurăm ceafa.
+    Pielea feţei nu are ambiguitatea asta: e de o singură parte, oricâtă
+    coafură ar fi în jur.
+
+    Măsurat: profil 0,11 decentrare, trei sferturi 0,07, frontal 0,01."""
+    if piele.sum() < 200 or silueta.sum() < 200:
+        return None
+    cx_p = float(np.where(piele)[1].mean())
+    cx_t = float(np.where(silueta)[1].mean())
+    lat = float(np.ptp(np.where(silueta.any(axis=0))[0])) or 1.0
+    dev = (cx_p - cx_t) / lat
+    if abs(dev) < DECENTRARE_MIN:
+        return None
+    return dev > 0
 
 
 def _varful_nasului(c: np.ndarray) -> int:
@@ -132,28 +136,28 @@ def _normalizat(contur: np.ndarray, n: int = 240) -> tuple[np.ndarray, float]:
 
 
 def masoara(bgr: np.ndarray) -> tuple[np.ndarray, float]:
-    """Profilul adevărat al feţei: contur normalizat plus înălţimea capului.
+    """Profilul adevărat al feţei: conturul normalizat al laturii cu faţa.
 
-    Conturul se întoarce în pixeli ai imaginii de lucru; scara în milimetri
-    vine de la poza frontală, care are distanţa dintre pupile."""
+    Conturul se întoarce în pixeli ai imaginii de lucru; scara nu contează,
+    fiindcă `_normalizat` împarte la o lungime a omului."""
     h, w = bgr.shape[:2]
     img = cv2.resize(bgr, (pipeline.LAT_LUCRU, int(h * pipeline.LAT_LUCRU / w)))
+    res = pipeline.MODELE_INST.seg.segment(pipeline._mp_image(img))
+    cat = np.squeeze(res.category_mask.numpy_view())
+
     # Silueta completă, nu cea a portretului: pe o poză din profil, segmentarea
     # pune tocmai nasul şi bărbia în clasa „corp", iar masca de portret le-ar
     # tăia -- exact părţile pentru care se face poza.
-    cap = pipeline._silueta_bruta(img).astype(bool)
+    cap = pipeline._curata(np.isin(cat, (1, 2, 3))).astype(bool)
     if cap.sum() < 5000:
         raise ProfilNepotrivit("Nu am găsit un cap în a doua fotografie.")
 
-    contur, _ = _fata_si_asimetrie(cap)
-    k = _varful_nasului(contur)
-    relativ = _proeminenta(contur, k) / max(float(np.ptp(contur)), 1e-9)
-    if relativ < NAS_MIN_RELATIV:
+    dreapta = _latura_fetei(cat == 3, cap)
+    if dreapta is None:
         raise ProfilNepotrivit(
-            "A doua poză nu pare făcută din profil -- nu se vede linia nasului. "
-            "E nevoie de o poză din lateral, cu capul întors complet şi faţa "
-            "descoperită.")
-    return _normalizat(contur)
+            "În a doua poză faţa se vede din faţă, nu din lateral. E nevoie de "
+            "o poză cu capul întors complet într-o parte.")
+    return _normalizat(_margine(cap, dreapta))
 
 
 def calibreaza(rec: "pipeline.Reconstructie", bgr_profil: np.ndarray) -> Calibrare:
@@ -186,8 +190,22 @@ def calibreaza(rec: "pipeline.Reconstructie", bgr_profil: np.ndarray) -> Calibra
     _, potrivire = _panta_robusta(dedus[lo:hi], masurat[lo:hi])
 
     mm = L_frontal * rec.mm_pe_px
-    return Calibrare(factor=factor, potrivire=potrivire,
-                     nas_masurat_mm=pm * mm, nas_dedus_mm=pd * mm)
+    c = Calibrare(factor=factor, potrivire=potrivire,
+                  nas_masurat_mm=pm * mm, nas_dedus_mm=pd * mm)
+
+    # Dacă cele două profile nu descriu acelaşi cap, factorul e o cifră fără
+    # acoperire. Nu se aplică, dar nici nu se opreşte lucrarea: poza frontală
+    # ajunge, iar omul află de ce n-a ajutat a doua.
+    if potrivire < POTRIVIRE_MIN:
+        c.folosita = False
+        c.motiv = ("Cele două poze nu se suprapun destul de bine ca să pot "
+                   "măsura adâncimea. Verifică să fie acelaşi om, acelaşi "
+                   "aparat şi capul întors complet în a doua.")
+    elif factor in FACTOR_LIMITE:
+        c.folosita = False
+        c.motiv = ("Din a doua poză iese o adâncime în afara limitelor "
+                   "omeneşti, deci n-am folosit-o.")
+    return c
 
 
 def _midline(rec: "pipeline.Reconstructie") -> np.ndarray:
