@@ -227,13 +227,18 @@ h3:first-of-type { margin-top: 6px; }
 }
 .lupa-inchide:hover { background: rgba(0, 0, 0, 0.7); }
 
-@media (min-width: 1024px) {
+/* Pragul e 880, nu 1024.
+   Un laptop cu ecran fizic lat, la scalarea Windows de 150-200%, raportează
+   sub 1000 de pixeli CSS -- deci pragul de 1024 lăsa tocmai laptopurile pe
+   aranjarea de telefon, deşi ecranul era mare. Pixelii CSS sunt singura
+   măsură care contează aici, nu cei ai ecranului. */
+@media (min-width: 880px) {
   .container { max-width: 1500px; padding: 22px 28px; }
   .bara-int { max-width: 1500px; }
 
   .lucru {
     display: grid; gap: 22px; align-items: start;
-    grid-template-columns: minmax(0, 1fr) 384px;
+    grid-template-columns: minmax(0, 1fr) 320px;
   }
 
   /* Bara de sus e lipită (63 px măsuraţi), deci vizorul porneşte de sub ea.
@@ -266,6 +271,11 @@ h3:first-of-type { margin-top: 6px; }
   }
   .sumar .va { font-size: 0.95rem; }
   .rail .cursor + .cursor { margin-top: 2px; }
+}
+
+/* De la lăţimea asta încolo încape un rail confortabil. */
+@media (min-width: 1180px) {
+  .lucru { grid-template-columns: minmax(0, 1fr) 384px; }
 }
 
 /* Ecrane foarte late: reglajele rămân la lăţimea lor, vizorul ia restul. */
