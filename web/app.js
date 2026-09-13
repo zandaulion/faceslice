@@ -154,18 +154,89 @@ function ecranFoto() {
   api('/api/jobs').then(listaLucrari).catch(() => {});
 }
 
+/**
+ * Ce deosebeşte o încercare de alta.
+ *
+ * Numele spune cine e; asta spune care variantă. Fără ea, patru rânduri cu
+ * acelaşi nume nu se pot alege între ele decât deschizându-le pe rând.
+ */
+function amprenta(j) {
+  const r = j.reglaje || {};
+  const p = [];
+  if (r.grosime_mm) p.push(`${(+r.grosime_mm).toFixed(1)} mm tablă`);
+  if (r.adancime_mm) p.push(`${r.adancime_mm} mm adâncime`);
+  if (+r.sari > 1) p.push(`1 din ${r.sari}`);
+  if (+r.inclinare) p.push(`înclinat ${r.inclinare}°`);
+  if (+r.rotire) p.push(`rotit ${r.rotire}°`);
+  if (r.detaliu) p.push(`relief ${(+r.detaliu).toFixed(2).replace(/0$/, '')}×`);
+  if (j.rezumat && j.rezumat.cu_gat === false) p.push('fără gât');
+  if (j.rezumat && j.rezumat.calibrat) p.push('calibrat');
+  return p.length ? p.join(' · ') : 'nereglată încă';
+}
+
 function listaLucrari(l) {
-  if (!l.length || !$('#lucrari')) return;
+  const gazda = $('#lucrari');
+  if (!l.length || !gazda) return;
+  gazda.innerHTML = '';
   const d = document.createElement('div');
   d.className = 'lista';
-  d.innerHTML = '<h3>Lucrări salvate</h3>' + l.map((j) =>
-    `<div class="lista-el" data-id="${j.id}"><span>${j.nume || 'portret'}</span>` +
-    `<span class="mut mic">${(j.rezumat.latime_cap_mm || 0).toFixed(0)} mm lat</span></div>`
-  ).join('');
+
+  // Căutarea apare doar când chiar e nevoie de ea.
+  const cauta = l.length > 4
+    ? '<input id="cauta" class="camp camp-cauta" placeholder="caută după nume…" autocomplete="off" />'
+    : '';
+  d.innerHTML = `<div class="cap-lista"><h3>Lucrări salvate</h3>${cauta}</div>` +
+    l.map((j) => `
+      <div class="lista-el" data-id="${j.id}" data-nume="${(j.nume || '').toLowerCase()}">
+        <div class="el-text">
+          <div class="el-nume">${j.nume || 'portret'}</div>
+          <div class="mut mic">${amprenta(j)}</div>
+        </div>
+        <div class="el-actiuni">
+          <button class="btn-ico" data-act="redenumeste" title="Redenumeşte">✎</button>
+          <button class="btn-ico" data-act="duplica" title="Duplică — porneşte o variantă">⧉</button>
+          <button class="btn-ico" data-act="sterge" title="Şterge">✕</button>
+        </div>
+      </div>`).join('');
+
   d.querySelectorAll('.lista-el').forEach((el) => {
-    el.onclick = () => { lucrare = { id: el.dataset.id }; ecranReglaje(); };
+    const id = el.dataset.id;
+    el.querySelector('.el-text').onclick = () => { lucrare = { id }; ecranReglaje(); };
+    el.querySelectorAll('.btn-ico').forEach((b) => {
+      b.onclick = async (e) => {
+        e.stopPropagation();
+        try {
+          if (b.dataset.act === 'redenumeste') {
+            const nume = prompt('Numele lucrării:', el.querySelector('.el-nume').textContent);
+            if (nume === null) return;
+            await api(`/api/jobs/${id}/nume`, {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ nume }),
+            });
+          } else if (b.dataset.act === 'duplica') {
+            await api(`/api/jobs/${id}/duplica`, { method: 'POST' });
+          } else {
+            if (!confirm('Ştergi lucrarea? Nu se mai poate recupera.')) return;
+            await api(`/api/jobs/${id}`, { method: 'DELETE' });
+          }
+          listaLucrari(await api('/api/jobs'));
+        } catch (err) {
+          $('#eroare-foto').textContent = err.message;
+        }
+      };
+    });
   });
-  $('#lucrari').appendChild(d);
+
+  const c = d.querySelector('#cauta');
+  if (c) {
+    c.oninput = () => {
+      const q = c.value.trim().toLowerCase();
+      d.querySelectorAll('.lista-el').forEach((el) => {
+        el.hidden = q && !el.dataset.nume.includes(q);
+      });
+    };
+  }
+  gazda.appendChild(d);
 }
 
 /* --------------------------------------------------------------- reglaje */

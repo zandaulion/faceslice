@@ -11,6 +11,7 @@ from __future__ import annotations
 import io
 import json
 import os
+import re
 import secrets
 import shutil
 import zipfile
@@ -118,6 +119,7 @@ async def lucrare_noua(foto: UploadFile = File(...),
     rez = rec.rezumat()
     rez["detaliu"] = calibrare.factor if calibrare else pipeline.DETALIU_IMPLICIT
     rez["calibrat"] = calibrare is not None
+    rez["cu_gat"] = cu_gat
     if calibrare:
         rez["calibrare"] = calibrare.rezumat()
     DB.execute("INSERT INTO jobs (id, device_id, created_at, nume, rezumat, reglaje)"
@@ -130,11 +132,57 @@ async def lucrare_noua(foto: UploadFile = File(...),
 
 @app.get("/api/jobs")
 def lucrari(dev: dict = Depends(dispozitiv)):
-    rows = DB.execute("SELECT id, created_at, nume, rezumat FROM jobs"
-                      " WHERE device_id=? ORDER BY created_at DESC LIMIT 50",
+    rows = DB.execute("SELECT id, created_at, nume, rezumat, reglaje FROM jobs"
+                      " WHERE device_id=? ORDER BY created_at DESC LIMIT 200",
                       (dev["id"],)).fetchall()
     return [{"id": r["id"], "creat": r["created_at"], "nume": r["nume"],
-             "rezumat": json.loads(r["rezumat"] or "{}")} for r in rows]
+             "rezumat": json.loads(r["rezumat"] or "{}"),
+             "reglaje": json.loads(r["reglaje"] or "{}")} for r in rows]
+
+
+@app.post("/api/jobs/{jid}/nume")
+async def redenumeste(jid: str, request: Request, dev: dict = Depends(dispozitiv)):
+    nume = ((await _corp(request)).get("nume") or "").strip()[:80] or None
+    cur = DB.execute("UPDATE jobs SET nume=? WHERE id=? AND device_id=?",
+                     (nume, jid, dev["id"]))
+    if not cur.rowcount:
+        raise HTTPException(404, "Lucrarea nu există.")
+    DB.commit()
+    return {"id": jid, "nume": nume}
+
+
+@app.post("/api/jobs/{jid}/duplica")
+def duplica(jid: str, dev: dict = Depends(dispozitiv)):
+    """O variantă porneşte de la acelaşi relief, nu de la aceeaşi fotografie.
+
+    Reconstrucţia e partea scumpă -- două secunde şi jumătate -- şi n-are de ce
+    fi refăcută ca să încerci altă grosime de tablă. Se copiază fişierele şi se
+    porneşte de la reglajele lucrării de la care s-a plecat, ca varianta nouă
+    să fie punctul în care ai rămas, nu o pagină goală."""
+    r = DB.execute("SELECT * FROM jobs WHERE id=? AND device_id=?",
+                   (jid, dev["id"])).fetchone()
+    if not r:
+        raise HTTPException(404, "Lucrarea nu există.")
+    nou = secrets.token_hex(8)
+    shutil.copytree(dosar_job(jid), dosar_job(nou), dirs_exist_ok=True)
+    DB.execute("INSERT INTO jobs (id, device_id, created_at, nume, rezumat, reglaje)"
+               " VALUES (?,?,?,?,?,?)",
+               (nou, dev["id"], acum(), _nume_variantei(r["nume"]),
+                r["rezumat"], r["reglaje"]))
+    DB.commit()
+    return {"id": nou}
+
+
+def _nume_variantei(nume: str | None) -> str:
+    """„Ion" -> „Ion (2)"; „Ion (2)" -> „Ion (3)".
+
+    Numerotarea continuă în loc să adauge încă un „(copie)" peste altul, ca a
+    cincea încercare să nu se cheme „Ion (copie) (copie) (copie) (copie)"."""
+    baza = (nume or "portret").strip()
+    m = re.match(r"^(.*?)\s*\((\d+)\)$", baza)
+    if m:
+        return f"{m.group(1)} ({int(m.group(2)) + 1})"
+    return f"{baza} (2)"
 
 
 def _detaliu_lucrarii(r) -> float:

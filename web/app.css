@@ -292,3 +292,30 @@ h3:first-of-type { margin-top: 6px; }
   input[type="range"]:hover { cursor: grab; }
   input[type="range"]:active { cursor: grabbing; }
 }
+
+/* ------------------------------------------------- lista de lucrări
+
+   Un rând spune două lucruri: cine e, şi care variantă. Al doilea e cel care
+   lipsea -- patru încercări ale aceluiaşi om arătau identic, deci nu se puteau
+   alege decât deschizându-le pe rând. */
+
+.cap-lista {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; flex-wrap: wrap; margin-bottom: 4px;
+}
+.cap-lista h3 { margin: 0; }
+.camp-cauta { width: min(220px, 100%); padding: 6px 10px; font-size: 0.88rem; }
+
+.lista-el { align-items: center; gap: 12px; }
+.lista-el[hidden] { display: none; }
+.el-text { flex: 1; min-width: 0; cursor: pointer; }
+.el-nume { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.el-actiuni { display: flex; gap: 2px; flex: none; }
+
+.btn-ico {
+  border: 1px solid transparent; background: none; cursor: pointer;
+  color: var(--mut); border-radius: 8px; padding: 5px 8px;
+  font-size: 0.95rem; line-height: 1;
+}
+.btn-ico:hover { background: var(--hartie); border-color: var(--linie); color: var(--text); }
+.btn-ico:focus-visible { outline: 2px solid var(--salvie); outline-offset: 1px; }
