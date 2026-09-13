@@ -126,7 +126,15 @@ class PozaNepotrivita(Exception):
 # mm. Un cap de adult are între 130 şi 165 mm, aşa că verificăm şi rezultatul,
 # nu doar unghiul -- un unghi bun cu un cap absurd înseamnă tot o poză proastă.
 UNGHI_MAX = 20.0
-LATIME_CAP_PLAUZIBILA = (120.0, 180.0)
+
+# Plauzibilitatea se judecă pe faţă, nu pe siluetă.
+#
+# Silueta e păr plus faţă, iar părul n-are limită anatomică: o coafură creaţă şi
+# bogată dă legitim 185 mm acolo unde craniul are 145, şi pragul gândit pentru
+# craniu respingea poze bune. Lăţimea feţei se ia dintre punctele 234 şi 454 --
+# marginile ovalului facial -- raportată la distanţa dintre pupile, care e scara
+# întregii reconstrucţii. Raportul e anatomic: vreo 2,3 la un adult.
+LATIME_FATA_PLAUZIBILA = (95.0, 205.0)
 
 
 class FaraFata(Exception):
@@ -148,8 +156,9 @@ def _unghiuri(res) -> tuple[float, float]:
     return intors, inclinat
 
 
-def _plasa_faciala(img: np.ndarray) -> tuple[np.ndarray, float, float, float]:
-    """Adâncimea feţei din plasă, distanţa dintre pupile, şi orientarea capului."""
+def _plasa_faciala(img: np.ndarray) -> tuple[np.ndarray, float, float, float, float]:
+    """Adâncimea feţei din plasă, distanţa dintre pupile, orientarea şi lăţimea
+    feţei în pixeli."""
     H, W = img.shape[:2]
     res = MODELE_INST.plasa.detect(_mp_image(img))
     if not res.face_landmarks:
@@ -165,6 +174,10 @@ def _plasa_faciala(img: np.ndarray) -> tuple[np.ndarray, float, float, float]:
     # Pupilele se apropie în imagine când capul e întors, deci scara iese
     # prea mare. Corecţia e mică în intervalul acceptat, dar e gratuită.
     dip /= max(np.cos(np.radians(intors)), 0.5)
+
+    # Marginile ovalului facial, pentru verificarea de plauzibilitate.
+    lat_fata = (float(np.hypot(*(P[234, :2] - P[454, :2])))
+                if len(P) > 454 else 2.3 * dip)
 
     from scipy.spatial import Delaunay
     tris = Delaunay(P[:, :2]).simplices
@@ -189,7 +202,7 @@ def _plasa_faciala(img: np.ndarray) -> tuple[np.ndarray, float, float, float]:
         vals = l0 * p0[2] + l1 * p1[2] + l2 * p2[2]
         bloc = z[y0:y1, x0:x1]
         bloc[m] = vals[m]
-    return -z, dip, intors, inclinat   # semnul: mai mare = mai aproape
+    return -z, dip, intors, inclinat, lat_fata   # semnul: mai mare = mai aproape
 
 
 def _silueta_bruta(img: np.ndarray) -> np.ndarray:
@@ -248,7 +261,7 @@ def _monocular(img: np.ndarray) -> np.ndarray:
     return cv2.resize(d, (W, H), interpolation=cv2.INTER_CUBIC).astype(np.float64)
 
 
-def _verifica(intors: float, inclinat: float, latime_cap_mm: float) -> None:
+def _verifica(intors: float, inclinat: float, latime_fata_mm: float) -> None:
     """Poza e bună de reconstruit? Spune pe şleau ce anume e greşit.
 
     Refuzul e mai bun decât un rezultat tăcut şi fals: o poză din trei sferturi
@@ -263,12 +276,12 @@ def _verifica(intors: float, inclinat: float, latime_cap_mm: float) -> None:
         raise PozaNepotrivita(
             f"Bărbia e lăsată {sus} cam {abs(inclinat):.0f}°. "
             "E nevoie de o poză din faţă, cu privirea la nivelul aparatului.")
-    lo, hi = LATIME_CAP_PLAUZIBILA
-    if not lo <= latime_cap_mm <= hi:
+    lo, hi = LATIME_FATA_PLAUZIBILA
+    if not lo <= latime_fata_mm <= hi:
         raise PozaNepotrivita(
-            f"Din poză iese un cap de {latime_cap_mm:.0f} mm, ceea ce nu e "
-            "plauzibil. Încearcă o poză din faţă, cu tot capul în cadru şi "
-            "faţa neacoperită.")
+            f"Din poză iese o faţă de {latime_fata_mm:.0f} mm lăţime, ceea ce "
+            "nu e plauzibil. Verifică distanţa dintre pupile, sau încearcă o "
+            "poză din faţă cu faţa neacoperită.")
 
 
 def reconstruieste(bgr: np.ndarray, dip_mm: float = DIP_IMPLICIT_MM,
@@ -277,7 +290,7 @@ def reconstruieste(bgr: np.ndarray, dip_mm: float = DIP_IMPLICIT_MM,
     img = cv2.resize(bgr, (LAT_LUCRU, int(h * LAT_LUCRU / w)))
     H, W = img.shape[:2]
 
-    mp_z, dip_px, intors, inclinat = _plasa_faciala(img)
+    mp_z, dip_px, intors, inclinat, lat_fata_px = _plasa_faciala(img)
     cap, doar_cap = _silueta(img, cu_gat, dip_mm / dip_px)
     cap = cap.astype(bool)
     mono = _monocular(img)
@@ -316,7 +329,7 @@ def reconstruieste(bgr: np.ndarray, dip_mm: float = DIP_IMPLICIT_MM,
     ys = np.where(doar_cap.any(axis=1))[0]
     lo, hi = np.percentile(z[cap], [0.5, 99.8])
     latime_cap_mm = float(np.ptp(xs) * mm_pe_px)
-    _verifica(intors, inclinat, latime_cap_mm)
+    _verifica(intors, inclinat, float(lat_fata_px * mm_pe_px))
 
     return Reconstructie(
         baza=baza, detaliu=detaliu, alfa=alfa, cap=cap,
