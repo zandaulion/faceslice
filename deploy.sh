@@ -22,12 +22,16 @@ sed -i -E "s/faceslice-([0-9a-f]{12}|__BUILD_VERSION__)/faceslice-$V/" web/sw.js
 sed -i -E "s/\?v=([0-9a-f]{12}|__BUILD_VERSION__)/?v=$V/g" web/index.html
 echo "versiune web: $V"
 
+# Portul şi numele serviciului ţin de maşina pe care rulează, nu de proiect.
+PORT="${FACESLICE_PORT:-8000}"
+SERVICE="${FACESLICE_SERVICE:-faceslice}"
+
 podman build -t faceslice:latest -f deploy/Containerfile .
-systemctl --user restart faceslice
+systemctl --user restart "$SERVICE"
 
 for _ in $(seq 1 30); do
   sleep 1
-  if curl -fsS http://127.0.0.1:8000/api/health >/dev/null 2>&1; then
+  if curl -fsS "http://127.0.0.1:$PORT/api/health" >/dev/null 2>&1; then
     echo "faceslice pornit, sănătate confirmată"; exit 0
   fi
 done
