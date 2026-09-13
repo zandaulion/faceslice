@@ -132,7 +132,8 @@ h3:first-of-type { margin-top: 6px; }
   background: var(--hartie); border: 1px solid var(--linie);
   border-radius: 11px; padding: 8px; overflow: hidden;
 }
-.previz img { width: 100%; display: block; border-radius: 6px; }
+.previz img { width: 100%; display: block; border-radius: 6px;
+              background: transparent; }
 .previz figcaption {
   font-size: 0.72rem; color: var(--mut); text-align: center; margin-top: 6px;
 }
@@ -175,7 +176,6 @@ h3:first-of-type { margin-top: 6px; }
 
 /* Ecran lat: cadrul se strânge la lăţimea conţinutului în loc să se întindă. */
 @media (min-width: 1000px) {
-  .container { max-width: 860px; }
   .previz { grid-template-columns: 1.5fr 1fr; }
 }
 
@@ -193,3 +193,92 @@ h3:first-of-type { margin-top: 6px; }
         background: var(--sus-2); border: 1px solid var(--linie);
         font-size: .88rem; line-height: 1.55; color: var(--mut); }
 .nota strong { color: var(--text); }
+
+
+/* ---------------------------------------------------------------- pe laptop
+
+   Aplicaţia se foloseşte mai ales de pe laptop, nu de pe telefon. Acolo o
+   coloană îngustă la mijloc iroseşte tocmai spaţiul care contează: imaginile
+   sunt lucrarea, iar la ele te uiţi în timp ce tragi de cursoare. Deci vizorul
+   rămâne pe loc şi reglajele curg pe lângă el, ca într-o unealtă de desen --
+   nu una sub alta, cum cere un ecran de telefon. */
+
+.zone { display: grid; gap: 12px; }
+.lupa { all: unset; display: block; cursor: zoom-in; width: 100%; }
+.lupa:focus-visible { outline: 2px solid var(--salvie); outline-offset: 3px; }
+
+.lupa-strat {
+  position: fixed; inset: 0; z-index: 90;
+  display: flex; align-items: center; justify-content: center;
+  padding: 24px; background: rgba(20, 17, 13, 0.86);
+  overscroll-behavior: contain;
+}
+.lupa-strat[hidden] { display: none; }
+.lupa-strat img {
+  max-width: 100%; max-height: 100%;
+  object-fit: contain; border-radius: 8px;
+  background: var(--sus); box-shadow: 0 18px 60px rgba(0, 0, 0, 0.5);
+}
+.lupa-inchide {
+  position: absolute; top: 16px; right: 20px;
+  width: 42px; height: 42px; border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.25); cursor: pointer;
+  background: rgba(0, 0, 0, 0.45); color: #fff; font-size: 1.1rem;
+}
+.lupa-inchide:hover { background: rgba(0, 0, 0, 0.7); }
+
+@media (min-width: 1024px) {
+  .container { max-width: 1500px; padding: 22px 28px; }
+  .bara-int { max-width: 1500px; }
+
+  .lucru {
+    display: grid; gap: 22px; align-items: start;
+    grid-template-columns: minmax(0, 1fr) 384px;
+  }
+
+  /* Bara de sus e lipită (63 px măsuraţi), deci vizorul porneşte de sub ea.
+     Îşi derulează propriul conţinut dacă tot nu încape: aşa sumarul rămâne de
+     ajuns fără să se mişte pagina, iar reglajele din dreapta stau pe loc. */
+  .vizor {
+    position: sticky; top: 78px;
+    max-height: calc(100vh - 100px);
+    overflow-y: auto; overscroll-behavior: contain;
+  }
+
+  /* Imaginile cresc cât le lasă fereastra, nu cât le lasă coloana. Rezerva
+     acoperă bara, titlul cardului, legendele, nota de calibrare şi sumarul --
+     prima încercare lăsa 290 px şi sumarul cădea sub marginea de jos, adică
+     exact cifra pentru care te uitai acolo. */
+  .previz img { max-height: calc(100vh - 400px); object-fit: contain; }
+
+  .zone { grid-template-columns: 1fr 1fr; align-items: start; }
+  .rail .card { padding: 16px 18px; }
+  .rail .nota { margin-top: 0; }
+
+  /* Cifrele stau pe un rând fiecare. Lăsate să se rupă, o căsuţă ajungea de
+     145 px înaltă -- şapte dintre ele mâncau mai mult decât imaginea de
+     deasupra, pe care de fapt o priveşti. */
+  .sumar { grid-template-columns: repeat(auto-fit, minmax(92px, 1fr)); gap: 6px; }
+  .sumar div { padding: 7px 10px; }
+  .sumar .et {
+    font-size: 0.64rem; letter-spacing: 0.03em;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .sumar .va { font-size: 0.95rem; }
+  .rail .cursor + .cursor { margin-top: 2px; }
+}
+
+/* Ecrane foarte late: reglajele rămân la lăţimea lor, vizorul ia restul. */
+@media (min-width: 1600px) {
+  .container { max-width: 1760px; }
+  .bara-int { max-width: 1760px; }
+}
+
+/* Mausul are hover; ecranul tactil nu. Fără întrebarea asta, un buton rămâne
+   „apăsat" pe telefon după atingere, fiindcă hover-ul se lipeşte. */
+@media (hover: hover) {
+  .btn:hover { filter: brightness(1.06); }
+  .zona:hover { border-color: var(--linie-tare); }
+  input[type="range"]:hover { cursor: grab; }
+  input[type="range"]:active { cursor: grabbing; }
+}

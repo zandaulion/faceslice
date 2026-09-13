@@ -1,4 +1,10 @@
-"""Previzualizări: cum arată asamblat, şi unde cad planele de tăiere."""
+"""Previzualizări: cum arată asamblat, şi unde cad planele de tăiere.
+
+Desenele au fundal transparent, nu alb. Aplicaţia se foloseşte mai ales de pe
+laptop, unde imaginile sunt mari şi stau pe cartonul aplicaţiei: un dreptunghi
+alb în jurul capului se vedea ca un petic, iar pe tema întunecată ar fi fost o
+lanternă. Aşa, fundalul cardului trece prin ele în ambele teme.
+"""
 from __future__ import annotations
 
 import cv2
@@ -19,17 +25,17 @@ def asamblat(placi, lat_px: int = 720) -> bytes:
     w_mm, h_mm = max(xs) - min(xs), max(ys) - min(ys)
     esc = w_mm / (lat_px - 40)
     H = int(h_mm / esc) + 40
-    img = np.full((H, lat_px, 3), 250, np.uint8)
+    img = np.zeros((H, lat_px, 4), np.uint8)
     ox, oy = -min(xs) / esc + 20, -min(ys) / esc + 20
 
     for i, pl in enumerate(placi):
         f = i / max(len(placi) - 1, 1)
-        umbra = (int(196 - 76 * f), int(208 - 46 * f), int(172 + 72 * f))
+        umbra = (int(196 - 76 * f), int(208 - 46 * f), int(172 + 72 * f), 255)
         ext = pl.silueta
         for c in ext:
             cv2.fillPoly(img, [_puncte(c, esc, ox, oy)], umbra)
         for c in ext:
-            cv2.polylines(img, [_puncte(c, esc, ox, oy)], True, (105, 90, 76), 1, cv2.LINE_AA)
+            cv2.polylines(img, [_puncte(c, esc, ox, oy)], True, (105, 90, 76, 255), 1, cv2.LINE_AA)
     ok, buf = cv2.imencode(".png", img)
     return buf.tobytes() if ok else b""
 
@@ -72,14 +78,14 @@ def plane(z, cap, reglaje, mm_pe_px, lat_px: int = 320) -> bytes:
     esc = max(adanc_mm / (lat_px * 0.5), lung_mm / (lat_px * 1.9))
     PW = int(adanc_mm / esc) + 46
     PH = int(lung_mm / esc) + 24
-    img = np.full((PH, PW, 3), 250, np.uint8)
+    img = np.zeros((PH, PW, 4), np.uint8)
 
     poli = [(22, 12)]
     for i in range(L):
         poli.append((int(22 + d[i] / esc), int(12 + i * mm_pe_px / esc)))
     poli.append((22, PH - 12))
-    cv2.fillPoly(img, [np.array(poli, np.int32)], (214, 205, 194))
-    cv2.polylines(img, [np.array(poli, np.int32)], False, (120, 106, 92), 2, cv2.LINE_AA)
+    cv2.fillPoly(img, [np.array(poli, np.int32)], (214, 205, 194, 255))
+    cv2.polylines(img, [np.array(poli, np.int32)], False, (120, 106, 92, 255), 2, cv2.LINE_AA)
 
     nn = float(np.hypot(na, nb)) or 1.0
     pas = reglaje.grosime_mm * reglaje.sari
@@ -90,7 +96,7 @@ def plane(z, cap, reglaje, mm_pe_px, lat_px: int = 320) -> bytes:
         dx, dy = -nb / nn, na / nn
         p1 = (int(22 + (py - dy * 9000) / esc), int(12 + (px - dx * 9000) / esc))
         p2 = (int(22 + (py + dy * 9000) / esc), int(12 + (px + dx * 9000) / esc))
-        cv2.line(img, p1, p2, (70, 130, 220), 1, cv2.LINE_AA)
+        cv2.line(img, p1, p2, (70, 130, 220, 255), 1, cv2.LINE_AA)
         k += pas
     ok, buf = cv2.imencode(".png", img)
     return buf.tobytes() if ok else b""

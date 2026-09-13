@@ -29,7 +29,15 @@ async function api(cale, opt = {}) {
   return r.headers.get('content-type')?.includes('json') ? r.json() : r;
 }
 
+/* Ce trebuie desfăcut când se schimbă ecranul.
+
+   Ascultătorii puşi pe `document` -- lipirea din clipboard, de pildă -- nu
+   dispar odată cu marcajul care i-a cerut, aşa că ar rămâne agăţaţi şi ar
+   căuta câmpuri care nu mai există. */
+const curatenii = [];
+
 function pune(sablon) {
+  while (curatenii.length) curatenii.pop()();
   const c = $('#continut');
   c.innerHTML = '';
   c.appendChild($(sablon).content.cloneNode(true));
@@ -78,6 +86,21 @@ function ecranFoto() {
       `<img src="${u}" alt="" /><div class="mut mic" style="margin-top:8px">${f.name}</div>`;
   };
   fisier.onchange = () => fisier.files[0] && arata(fisier.files[0]);
+
+  // Pe laptop, o poză ajunge de multe ori în clipboard înainte să ajungă în
+  // vreun fişier -- decupată dintr-un mesaj, trasă dintr-un album. Lipirea o
+  // duce direct în prima zonă liberă, ca să nu treacă prin Salvare ca…
+  const peLipire = (e) => {
+    const item = [...(e.clipboardData?.items || [])]
+      .find((x) => x.type.startsWith('image/'));
+    if (!item) return;
+    const f = item.getAsFile();
+    if (!f) return;
+    e.preventDefault();
+    if (!ales) arata(f); else arataProfil(f);
+  };
+  document.addEventListener('paste', peLipire);
+  curatenii.push(() => document.removeEventListener('paste', peLipire));
 
   // A doua poză: acelaşi tipar, dar fără ea se merge mai departe.
   const fisierProfil = $('#fisier-profil');
@@ -165,9 +188,44 @@ function citesteReglaje() {
   return r;
 }
 
+/**
+ * Măreşte o previzualizare.
+ *
+ * Pe laptop se judecă dacă un detaliu mic supravieţuieşte tăierii, iar asta nu
+ * se vede într-o imagine cât un card. Escape şi clicul pe fundal închid --
+ * ambele, fiindcă pe laptop mâna e când pe tastatură, când pe maus.
+ */
+function porneseLupa() {
+  const strat = $('#lupa-strat');
+  const mare = $('#lupa-img');
+  if (!strat) return;
+
+  const inchide = () => {
+    strat.hidden = true;
+    mare.removeAttribute('src');
+    document.removeEventListener('keydown', peTasta);
+  };
+  const peTasta = (e) => { if (e.key === 'Escape') inchide(); };
+
+  for (const b of document.querySelectorAll('.lupa')) {
+    b.onclick = () => {
+      const sursa = document.getElementById(b.dataset.mare);
+      if (!sursa?.src) return;
+      mare.src = sursa.src;
+      mare.alt = sursa.alt;
+      strat.hidden = false;
+      document.addEventListener('keydown', peTasta);
+      $('#lupa-inchide').focus();
+    };
+  }
+  strat.onclick = (e) => { if (e.target === strat) inchide(); };
+  $('#lupa-inchide').onclick = inchide;
+}
+
 function ecranReglaje() {
   pune('#sablon-reglaje');
   $('#btn-inapoi').onclick = ecranFoto;
+  porneseLupa();
 
   // Cursorul de relief porneşte de la ce s-a măsurat pentru omul acesta, dacă
   // s-a măsurat. Altfel rămâne pe media care nu ştie ce obiectiv a fost.
@@ -230,14 +288,17 @@ async function previzualizeaza() {
     $('#img-asamblat').src = `data:image/png;base64,${d.asamblat}`;
     $('#img-plane').src = `data:image/png;base64,${d.plane}`;
     const i = d.info;
-    const g = Object.entries(i.greutate_kg).map(([n, v]) => `${v} kg ${n}`).join(' · ');
+    // Fiecare material îşi primeşte căsuţa lui, ca toate celelalte cifre.
+    // Înşirate într-un bloc pe toată lăţimea, se rupeau pe patru rânduri şi
+    // împingeau sumarul sub marginea de jos -- pe laptop, unde stă lipit lângă
+    // imagine, asta însemna că nu se mai vedea deloc.
     sumar.innerHTML = [
-      ['plăci de tăiat', i.placi],
-      ['contururi distincte', i.contururi],
-      ['tablă necesară', `${i.arie_dm2} dm²`],
-      ['înălţimea teancului', `${i.inaltime_teanc_mm} mm`],
-    ].map(([e, v]) => `<div><div class="et">${e}</div><div class="va">${v}</div></div>`).join('')
-      + `<div style="grid-column:1/-1"><div class="et">greutate</div><div class="va">${g}</div></div>`;
+      ['plăci', i.placi],
+      ['contururi', i.contururi],
+      ['tablă', `${i.arie_dm2} dm²`],
+      ['teanc', `${i.inaltime_teanc_mm} mm`],
+      ...Object.entries(i.greutate_kg).map(([n, v]) => [n, `${v} kg`]),
+    ].map(([e, v]) => `<div><div class="et">${e}</div><div class="va">${v}</div></div>`).join('');
     sumar.style.opacity = '1';
   } catch (e) {
     if (e.name !== 'AbortError' && sumar) {

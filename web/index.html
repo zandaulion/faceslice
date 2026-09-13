@@ -51,6 +51,7 @@
     <p class="mut mic">Dacă poza nu e bună, îţi spunem exact ce anume, ca s-o
       poţi reface. Mai bine un refuz decât un portret greşit tăiat în metal.</p>
 
+    <div class="zone">
     <label class="zona" id="zona">
       <input type="file" id="fisier" accept="image/*" hidden />
       <div class="zona-int">
@@ -60,7 +61,7 @@
       </div>
     </label>
 
-    <label class="zona zona-mica" id="zona-profil">
+    <label class="zona" id="zona-profil">
       <input type="file" id="fisier-profil" accept="image/*" hidden />
       <div class="zona-int">
         <div class="zona-ico">📐</div>
@@ -68,6 +69,7 @@
         <div class="mut mic">capul întors complet într-o parte</div>
       </div>
     </label>
+    </div>
     <p class="mut mic">Din faţă, adâncimea e ghicită, iar cine-o ghiceşte nu ştie
       cu ce obiectiv ai fotografiat: la 26 mm ţinut aproape nasul iese mărit, la
       85 mm de departe nu. Din profil, nasul nu mai e ghicit — e o lungime
@@ -98,20 +100,28 @@
 
 <!-- Pasul 2: reglaje -->
 <template id="sablon-reglaje">
+<div class="lucru">
+  <div class="vizor">
   <div class="card">
     <div class="cap-card">
       <h2>2 · Reglaje</h2>
       <button id="btn-inapoi" class="btn btn-mic">← altă fotografie</button>
     </div>
     <div class="previz">
-      <figure><img id="img-asamblat" alt="Cum arată asamblat" /><figcaption>asamblat</figcaption></figure>
-      <figure><img id="img-plane" alt="Unde cad planele de tăiere" /><figcaption>planele de tăiere</figcaption></figure>
+      <figure><button class="lupa" data-mare="img-asamblat">
+        <img id="img-asamblat" alt="Cum arată asamblat" /></button>
+        <figcaption>asamblat <span class="mut mic">— click pentru mărire</span></figcaption></figure>
+      <figure><button class="lupa" data-mare="img-plane">
+        <img id="img-plane" alt="Unde cad planele de tăiere" /></button>
+        <figcaption>planele de tăiere</figcaption></figure>
     </div>
-    <div id="calibrare" class="nota" hidden></div>
     <div id="sumar" class="sumar"></div>
   </div>
+  </div>
 
+  <div class="rail">
   <div class="card">
+    <div id="calibrare" class="nota" hidden></div>
     <h3>Material şi mărime</h3>
     <div class="cursor"><label>Grosimea tablei <b id="v-grosime">3.0 mm</b></label>
       <input type="range" id="grosime" min="0.5" max="10" step="0.5" value="3" /></div>
@@ -160,7 +170,16 @@
     <p class="mut mic">Un fişier pe coală, plus ghidul de montaj. Conturul plăcii
       următoare e gravat pe fiecare placă — aceea e alinierea.</p>
   </div>
+  </div>
+</div>
 </template>
+
+<!-- Mărirea unei previzualizări. Pe laptop se judecă dacă detaliile mici
+     supravieţuiesc tăierii, iar asta nu se vede într-o imagine de 400 px. -->
+<div id="lupa-strat" class="lupa-strat" hidden>
+  <button id="lupa-inchide" class="lupa-inchide" aria-label="Închide">✕</button>
+  <img id="lupa-img" alt="" />
+</div>
 
 <script type="module" src="/app.js"></script>
 </body>
