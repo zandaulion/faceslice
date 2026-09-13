@@ -358,6 +358,16 @@ async function previzualizeaza() {
     });
     $('#img-asamblat').src = `data:image/png;base64,${d.asamblat}`;
     $('#img-plane').src = `data:image/png;base64,${d.plane}`;
+
+    // Ce se vede în desen, şi în cifre: plinul e tablă, palidul e aer.
+    const leg = $('#leg-plane');
+    if (leg) {
+      const g = +$('#grosime').value, s_ = +$('#sari').value;
+      const gol = g * (s_ - 1);
+      leg.textContent = gol > 0
+        ? `— ${g.toFixed(1)} mm tablă, ${gol.toFixed(1)} mm gol între ele`
+        : `— ${g.toFixed(1)} mm tablă, lipite`;
+    }
     const i = d.info;
     // Fiecare material îşi primeşte căsuţa lui, ca toate celelalte cifre.
     // Înşirate într-un bloc pe toată lăţimea, se rupeau pe patru rânduri şi

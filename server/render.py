@@ -40,7 +40,7 @@ def asamblat(placi, lat_px: int = 720) -> bytes:
     return buf.tobytes() if ok else b""
 
 
-def plane(z, cap, reglaje, mm_pe_px, lat_px: int = 320) -> bytes:
+def plane(z, cap, reglaje, mm_pe_px, lat_px: int = 480) -> bytes:
     """Profilul capului cu planele de tăiere peste el.
 
     Un unghi e greu de judecat dintr-un număr; peste profil se vede imediat ce
@@ -84,19 +84,43 @@ def plane(z, cap, reglaje, mm_pe_px, lat_px: int = 320) -> bytes:
     for i in range(L):
         poli.append((int(22 + d[i] / esc), int(12 + i * mm_pe_px / esc)))
     poli.append((22, PH - 12))
-    cv2.fillPoly(img, [np.array(poli, np.int32)], (214, 205, 194, 255))
-    cv2.polylines(img, [np.array(poli, np.int32)], False, (120, 106, 92, 255), 2, cv2.LINE_AA)
+    # Capul se umple abia vizibil: e doar reperul în care stau plăcile.
+    cv2.fillPoly(img, [np.array(poli, np.int32)], (214, 205, 194, 60))
 
+    # Plăcile se desenează ca benzi de grosimea lor, nu ca linii.
+    #
+    # O linie subţire la fiecare pas nu spune nici cât e de groasă tabla, nici
+    # cât gol rămâne când sari peste straturi -- „3 mm tablă din 2 în 2" arăta
+    # identic cu „6 mm tablă lipite". Aici plinul e metal şi palidul e aer, iar
+    # golurile chiar există: înălţimea teancului le numără.
     nn = float(np.hypot(na, nb)) or 1.0
     pas = reglaje.grosime_mm * reglaje.sari
     proiectii = (np.arange(L) * mm_pe_px) * na + d * nb
+    dx, dy = -nb / nn, na / nn
+
+    def _muchie(kk: float) -> tuple[tuple[int, int], tuple[int, int]]:
+        px, py = na * kk / nn**2, nb * kk / nn**2
+        return ((int(22 + (py - dy * 9000) / esc), int(12 + (px - dx * 9000) / esc)),
+                (int(22 + (py + dy * 9000) / esc), int(12 + (px + dx * 9000) / esc)))
+
+    benzi = np.zeros(img.shape[:2], np.uint8)
+    taieturi = []
     k = float(proiectii.min())
     while k < proiectii.max():
-        px, py = na * k / nn**2, nb * k / nn**2
-        dx, dy = -nb / nn, na / nn
-        p1 = (int(22 + (py - dy * 9000) / esc), int(12 + (px - dx * 9000) / esc))
-        p2 = (int(22 + (py + dy * 9000) / esc), int(12 + (px + dx * 9000) / esc))
-        cv2.line(img, p1, p2, (70, 130, 220, 255), 1, cv2.LINE_AA)
+        (a1, a2), (b1, b2) = _muchie(k), _muchie(k + reglaje.grosime_mm)
+        cv2.fillPoly(benzi, [np.array([a1, a2, b2, b1], np.int32)], 255)
+        taieturi.append((a1, a2))
         k += pas
+
+    # Numai înăuntrul capului: benzile în afara siluetei n-ar însemna nimic.
+    inauntru = np.zeros(img.shape[:2], np.uint8)
+    cv2.fillPoly(inauntru, [np.array(poli, np.int32)], 255)
+    # Plinul e tablă, palidul e aer -- deosebirea se face din opacitate, nu
+    # din nuanţă: două tonuri apropiate pe acelaşi desen nu se disting.
+    img[(benzi > 0) & (inauntru > 0)] = (214, 205, 194, 255)
+    cv2.polylines(img, [np.array(poli, np.int32)], False,
+                  (120, 106, 92, 255), 2, cv2.LINE_AA)
+    for a1, a2 in taieturi:
+        cv2.line(img, a1, a2, (70, 130, 220, 255), 1, cv2.LINE_AA)
     ok, buf = cv2.imencode(".png", img)
     return buf.tobytes() if ok else b""
