@@ -30,17 +30,6 @@ INTRARE_ADANC = 518          # multiplu de 14, cum cere modelul
 # singurul lucru din fotografie a cărui mărime reală se poate afla fără riglă.
 DIP_IMPLICIT_MM = 63.0
 
-# Cât din bust intră sub bărbie, şi cât de lat are voie să fie pe parcurs.
-#
-# Limita creşte de la gât spre bază, ca un bust adevărat care se deschide spre
-# umeri. Nu e o formă impusă, ci un plafon: unde masca de piele e mai îngustă --
-# o poză în care umărul se vede întreg, cu haine -- se ia conturul adevărat.
-# Plafonul lucrează doar acolo unde realitatea lipseşte, iar asta se întâmplă
-# des: pe poza de probă umerii ies din cadru chiar de la nivelul bărbiei, deci
-# masca e un dreptunghi cât fotografia, nu un umăr.
-GAT_MM = 55.0
-GAT_LAT_SUS = 0.55      # la bărbie, faţă de lăţimea capului
-GAT_LAT_JOS = 1.05      # la bază
 
 # Cât se amplifică relieful facial peste forma mare.
 #
@@ -231,57 +220,22 @@ def _silueta(img: np.ndarray, cu_gat: bool = True,
              mm_pe_px: float = 0.3) -> tuple[np.ndarray, np.ndarray]:
     """Silueta de tăiat, plus capul singur.
 
-    Capul e păr şi pielea feţei. Gâtul e altceva: segmentarea n-are o clasă
-    „gât", ci una „piele de corp", care pe o poză obişnuită prinde şi umerii, şi
-    pieptul -- măsurat, toată lăţimea cadrului şi până la marginea de jos. Luată
-    ca atare, bifa dădea un cap de 278 mm în loc de 137.
+    Capul e păr şi pielea feţei. Cu gât, se adaugă pielea de corp aşa cum o dă
+    segmentarea, fără s-o strunesc: forma care iese -- un gât care se subţiază
+    spre bază, cu umerii unde se văd -- e a omului din poză, iar o limită
+    impusă de mine o făcea a mea. Pe o poză apropiată iese un bust scurt; pe
+    una depărtată, umerii întregi. Aşa şi trebuie.
 
-    Aşa că se ia doar cât e plauzibil gât: o bandă în jurul axei capului,
-    oprită drept la o adâncime aleasă sub bărbie. Tăietura dreaptă nu e o
-    concesie, e un câştig -- bustul capătă o bază plată şi stă în picioare,
-    ceea ce un cap tăiat la maxilar nu poate.
-
-    Întoarce şi capul singur, fiindcă lăţimea capului se măsoară pe el
-    indiferent de bifă: altfel „lăţimea capului" ar deveni lăţimea umerilor,
-    iar verificarea de plauzibilitate şi-ar pierde rostul."""
+    Întoarce şi capul singur, fiindcă lăţimea şi înălţimea capului se măsoară
+    pe el. Fără asta, „lăţimea capului" devine lăţimea umerilor -- pe poza de
+    probă, 278 mm în loc de 137 -- iar verificarea de plauzibilitate respingea
+    tocmai pozele bune."""
     res = MODELE_INST.seg.segment(_mp_image(img))
     cat = np.squeeze(res.category_mask.numpy_view())
     doar_cap = _curata(np.isin(cat, (1, 3))).astype(bool)
-    if not cu_gat or not doar_cap.any():
+    if not cu_gat:
         return doar_cap.astype(np.uint8), doar_cap
-
-    ys = np.where(doar_cap.any(axis=1))[0]
-    xs = np.where(doar_cap.any(axis=0))[0]
-    barbie = int(ys.max())
-    taietura = min(barbie + int(GAT_MM / max(mm_pe_px, 1e-6)), img.shape[0] - 1)
-    centru = (xs.min() + xs.max()) / 2.0
-    latime = float(np.ptp(xs))
-    if taietura <= barbie:
-        return doar_cap.astype(np.uint8), doar_cap
-
-    piele = (cat == 2)
-    gat = np.zeros_like(doar_cap)
-    for y in range(barbie - int(0.10 * latime), taietura + 1):
-        if y < 0 or y >= piele.shape[0]:
-            continue
-        t = np.clip((y - barbie) / (taietura - barbie), 0.0, 1.0)
-        jum = (GAT_LAT_SUS + (GAT_LAT_JOS - GAT_LAT_SUS) * t ** 1.6) * latime / 2
-
-        # Se ia banda de piele care conţine axa capului, nu toată pielea de pe
-        # rând: altfel o mână ridicată lângă obraz s-ar lipi de bust.
-        rand = piele[y]
-        c = int(round(centru))
-        if not rand[min(max(c, 0), len(rand) - 1)]:
-            continue
-        st = c
-        while st > 0 and rand[st - 1]:
-            st -= 1
-        dr = c
-        while dr < len(rand) - 1 and rand[dr + 1]:
-            dr += 1
-        gat[y, max(st, int(centru - jum)):min(dr + 1, int(centru + jum) + 1)] = True
-
-    return _curata(doar_cap | gat), doar_cap
+    return _curata(np.isin(cat, (1, 2, 3))), doar_cap
 
 
 def _monocular(img: np.ndarray) -> np.ndarray:
