@@ -8,7 +8,7 @@
 // directory. A version derived from the content cannot be forgotten, which a
 // hand-bumped constant can and eventually will be -- and a worker whose bytes
 // have not changed is a worker the browser will not update.
-const CACHE_NAME = 'faceslice-c348ed49c743';
+const CACHE_NAME = 'faceslice-b1ec48b3908b';
 
 importScripts('/sw-update.js');
 

@@ -87,57 +87,53 @@ def plane(z, cap, reglaje, mm_pe_px, lat_px: int = 480) -> bytes:
     # Capul NU se umple. Numai plăcile au material; între ele trebuie să se
     # vadă fundalul paginii, altfel golul arată tot a ceva.
 
-    # Plăcile se desenează ca benzi de grosimea lor, nu ca linii.
+    # Plăcile se desenează aşa cum sunt: dreptunghiuri.
     #
-    # O linie subţire la fiecare pas nu spune nici cât e de groasă tabla, nici
-    # cât gol rămâne când sari peste straturi -- „3 mm tablă din 2 în 2" arăta
-    # identic cu „6 mm tablă lipite". Aici plinul e metal şi palidul e aer, iar
-    # golurile chiar există: înălţimea teancului le numără.
+    # O placă e o foaie plată. Conturul ei e uniunea a tot ce cade în felia de
+    # adâncime -- `sel = (hh >= niv[k]) & (hh < niv[k] + pas)` în feliator --
+    # deci nu se schimbă pe toată grosimea tablei. Desenul o tăia după curba
+    # capului, ceea ce sugera un detaliu pe muchie pe care tabla nu-l are:
+    # muchia unei plăci e un perete drept, iar tot detaliul stă în contur.
+    #
+    # Aşa se vede şi scara adevărată a obiectului: treapta dintre plăci e exact
+    # grosimea tablei, iar asta e rezoluţia reliefului, nu o aproximaţie.
     nn = float(np.hypot(na, nb)) or 1.0
     pas = reglaje.grosime_mm * reglaje.sari
     proiectii = (np.arange(L) * mm_pe_px) * na + d * nb
-    dx, dy = -nb / nn, na / nn
 
-    def _muchie(kk: float) -> tuple[tuple[int, int], tuple[int, int]]:
-        px, py = na * kk / nn**2, nb * kk / nn**2
-        return ((int(22 + (py - dy * 9000) / esc), int(12 + (px - dx * 9000) / esc)),
-                (int(22 + (py + dy * 9000) / esc), int(12 + (px + dx * 9000) / esc)))
-
-    benzi = np.zeros(img.shape[:2], np.uint8)
-    taieturi = []
-    k = float(proiectii.min())
-    while k < proiectii.max():
-        (a1, a2), (b1, b2) = _muchie(k), _muchie(k + reglaje.grosime_mm)
-        cv2.fillPoly(benzi, [np.array([a1, a2, b2, b1], np.int32)], 255)
-        taieturi.append((a1, a2))
-        k += pas
-
-    # Numai înăuntrul capului: benzile în afara siluetei n-ar însemna nimic.
     inauntru = np.zeros(img.shape[:2], np.uint8)
     cv2.fillPoly(inauntru, [np.array(poli, np.int32)], 255)
-    # Tabla e plină şi de un ton închis; golul e fundalul gol al paginii.
-    #
-    # Prima încercare deosebea plinul de gol prin opacitate -- palid tare faţă
-    # de palid slab -- şi pe fundal deschis arătau identic. Deosebirea trebuie
-    # să fie între „material" şi „nimic", nu între două nuanţe ale aceleiaşi
-    # culori.
-    metal = (benzi > 0) & (inauntru > 0)
-    img[metal] = (150, 163, 176, 255)
 
-    # Muchia fiecărei plăci, ca să se vadă unde se desparte de vecina ei chiar
-    # şi când sunt lipite.
+    # Coordonatele fiecărui pixel în sistemul felierii: `pr` de-a lungul
+    # normalei (adică numărul plăcii), `sp` perpendicular pe ea (adică poziţia
+    # în conturul plăcii).
+    yy, xx = np.mgrid[0:img.shape[0], 0:img.shape[1]]
+    Dm = (xx - 22) * esc
+    Hm = (yy - 12) * esc
+    pr = (Hm * na + Dm * nb) / nn
+    sp = (-Hm * nb + Dm * na) / nn
+
+    cap_px = inauntru > 0
+    metal = np.zeros(img.shape[:2], bool)
+    k = float(proiectii.min())
+    while k < proiectii.max():
+        felie = cap_px & (pr >= k / nn) & (pr < (k + reglaje.grosime_mm) / nn)
+        if felie.any():
+            # Conturul plăcii: cât se întinde tot ce cade în felie. Constant pe
+            # toată grosimea -- de aici dreptunghiul.
+            lo, hi = sp[felie].min(), sp[felie].max()
+            banda = (pr >= k / nn) & (pr < (k + reglaje.grosime_mm) / nn)
+            metal |= banda & (sp >= lo) & (sp <= hi)
+        k += pas
+
+    img[metal] = (150, 163, 176, 255)
     contur = metal.astype(np.uint8) - cv2.erode(metal.astype(np.uint8),
                                                 np.ones((3, 3), np.uint8))
     img[contur > 0] = (96, 112, 128, 255)
 
-    # Muchia de început a fiecărei plăci, desenată şi înăuntru: când plăcile se
-    # ating -- fără sărituri -- conturul exterior nu mai arată despărţirile, iar
-    # teancul pare o singură bucată turnată în loc de cincisprezece tăiate.
-    # Dincolo de cap linia continuă palid, ca să se vadă unghiul felierii.
-    for a1, a2 in taieturi:
-        linie = np.zeros(img.shape[:2], np.uint8)
-        cv2.line(linie, a1, a2, 255, 1, cv2.LINE_AA)
-        img[(linie > 0) & metal] = (96, 112, 128, 255)
-        img[(linie > 0) & (inauntru == 0)] = (70, 130, 220, 110)
+    # Conturul capului, ca reper: se vede cât din formă prinde fiecare placă.
+    cv2.polylines(img, [np.array(poli, np.int32)], False,
+                  (150, 136, 120, 110), 1, cv2.LINE_AA)
+
     ok, buf = cv2.imencode(".png", img)
     return buf.tobytes() if ok else b""

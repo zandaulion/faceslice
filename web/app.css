@@ -319,3 +319,8 @@ h3:first-of-type { margin-top: 6px; }
 }
 .btn-ico:hover { background: var(--hartie); border-color: var(--linie); color: var(--text); }
 .btn-ico:focus-visible { outline: 2px solid var(--salvie); outline-offset: 1px; }
+
+/* Sub vreo patru trepte nasul iese blocat. Cifra se colorează, ca alegerea
+   grosimii să nu fie o surpriză de după tăiere. */
+.sumar .grosolan { border-color: var(--teracota); }
+.sumar .grosolan .va, .sumar .grosolan .et { color: var(--teracota); }

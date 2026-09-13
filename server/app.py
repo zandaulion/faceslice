@@ -231,6 +231,42 @@ def _reglaje(d: dict) -> Reglaje:
     return r
 
 
+def _trepte_nas(solid: Solid, reg) -> dict:
+    """Pe câte plăci se întinde nasul, în obiectul final.
+
+    E cifra care spune dacă portretul va fi citibil, şi singura care leagă
+    grosimea tablei de ce se vede: sub vreo patru trepte nasul iese blocat.
+    Altfel se află abia după tăiere, când nu mai e nimic de făcut.
+
+    Se măsoară pe relieful deja comprimat la adâncimea cerută, nu pe
+    reconstrucţie: între ele stau comprimarea şi curba, iar amândouă schimbă
+    exact cifra asta."""
+    try:
+        zc = solid._comprimat(reg) * solid.mm          # în milimetri
+    except Exception:
+        return {}
+    val = np.where(np.isnan(zc), -np.inf, zc)
+    linii = np.nanmax(np.where(np.isnan(zc), np.nan, zc), axis=1)
+    bun = ~np.isnan(linii)
+    if bun.sum() < 40:
+        return {}
+    prof = linii[bun]
+    lo, hi = int(0.35 * len(prof)), int(0.85 * len(prof))
+    if hi - lo < 20:
+        return {}
+    k = int(np.argmax(prof[lo:hi])) + lo
+    n = max(len(prof) // 12, 6)
+    jur = np.r_[prof[max(0, k - n):max(0, k - n // 3)], prof[k + n // 3:k + n]]
+    if not len(jur):
+        return {}
+    nas_mm = float(prof[k] - np.median(jur))
+    treapta = reg.grosime_mm * max(reg.sari, 1)
+    if nas_mm <= 0 or treapta <= 0:
+        return {}
+    return {"nas_mm": round(nas_mm, 1),
+            "trepte_nas": round(nas_mm / treapta, 1)}
+
+
 @app.post("/api/jobs/{jid}/previzualizare")
 async def previzualizare(jid: str, request: Request, dev: dict = Depends(dispozitiv)):
     d = await request.json()
@@ -238,9 +274,12 @@ async def previzualizare(jid: str, request: Request, dev: dict = Depends(dispozi
     detaliu_x = None if cerut is None else float(np.clip(float(cerut), 0.0, 5.0))
     reg = _reglaje(d)
     _, z, cap, mm = _incarca(jid, dev, detaliu_x)
-    placi, info = Solid(z, cap, mm).felieaza(reg)
+    solid = Solid(z, cap, mm)
+    placi, info = solid.felieaza(reg)
     if not placi:
         raise HTTPException(422, "Reglajele nu produc nicio placă.")
+    info |= _trepte_nas(solid, reg)
+
     DB.execute("UPDATE jobs SET reglaje=? WHERE id=?",
                (json.dumps(reg.__dict__ | {"detaliu": detaliu_x}), jid))
     DB.commit()

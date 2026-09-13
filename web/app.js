@@ -379,7 +379,11 @@ async function previzualizeaza() {
       ['tablă', `${i.arie_dm2} dm²`],
       ['teanc', `${i.inaltime_teanc_mm} mm`],
       ...Object.entries(i.greutate_kg).map(([n, v]) => [n, `${v} kg`]),
-    ].map(([e, v]) => `<div><div class="et">${e}</div><div class="va">${v}</div></div>`).join('');
+    ].map(([e, v]) => `<div><div class="et">${e}</div><div class="va">${v}</div></div>`).join('')
+      + (i.trepte_nas
+        ? `<div class="${i.trepte_nas < 4 ? 'grosolan' : ''}">` +
+          `<div class="et">nas</div><div class="va">${i.trepte_nas} trepte</div></div>`
+        : '');
     sumar.style.opacity = '1';
   } catch (e) {
     if (e.name !== 'AbortError' && sumar) {
