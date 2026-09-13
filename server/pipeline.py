@@ -50,6 +50,8 @@ class Reconstructie:
     detaliu: np.ndarray      # relieful facial, ca abatere de la propria netezire
     alfa: np.ndarray         # trecerea moale de la faţă spre restul capului
     cap: np.ndarray          # masca siluetei
+    intors: float            # orientarea capului la poză, în grade
+    inclinat: float
     mm_pe_px: float
     dip_px: float
     latime_cap_mm: float
@@ -87,6 +89,7 @@ class Modele:
                     base_options=BaseOptions(
                         model_asset_path=f"{MODELE}/face_landmarker.task"),
                     running_mode=vision.RunningMode.IMAGE, num_faces=1,
+                    output_facial_transformation_matrixes=True,
                     min_face_detection_confidence=0.25))
         return self._plasa
 
@@ -112,6 +115,19 @@ class Modele:
 MODELE_INST = Modele()
 
 
+class PozaNepotrivita(Exception):
+    """Fotografia are o faţă, dar nu una din care se poate reconstrui."""
+
+
+# Cât de întors poate fi capul. Peste atât, două lucruri se strică deodată:
+# silueta prinde latura capului în loc de contur, iar distanţa dintre pupile se
+# scurtează în imagine, deci scara iese prea mare. La 52° ieşea un cap de 333
+# mm. Un cap de adult are între 130 şi 165 mm, aşa că verificăm şi rezultatul,
+# nu doar unghiul -- un unghi bun cu un cap absurd înseamnă tot o poză proastă.
+UNGHI_MAX = 20.0
+LATIME_CAP_PLAUZIBILA = (120.0, 180.0)
+
+
 class FaraFata(Exception):
     """Fotografia nu conţine o faţă utilizabilă."""
 
@@ -121,18 +137,33 @@ def _mp_image(bgr: np.ndarray) -> mp.Image:
                     data=cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB))
 
 
-def _plasa_faciala(img: np.ndarray) -> tuple[np.ndarray, float]:
-    """Adâncimea feţei din plasă, plus distanţa dintre pupile în pixeli."""
+def _unghiuri(res) -> tuple[float, float]:
+    """Cât e întors şi cât e înclinat capul, în grade."""
+    if not res.facial_transformation_matrixes:
+        return 0.0, 0.0
+    M = np.array(res.facial_transformation_matrixes[0])
+    intors = float(np.degrees(np.arctan2(-M[2, 0], np.hypot(M[2, 1], M[2, 2]))))
+    inclinat = float(np.degrees(np.arctan2(M[2, 1], M[2, 2])))
+    return intors, inclinat
+
+
+def _plasa_faciala(img: np.ndarray) -> tuple[np.ndarray, float, float, float]:
+    """Adâncimea feţei din plasă, distanţa dintre pupile, şi orientarea capului."""
     H, W = img.shape[:2]
     res = MODELE_INST.plasa.detect(_mp_image(img))
     if not res.face_landmarks:
         raise FaraFata("Nu am găsit o faţă în fotografie.")
+    intors, inclinat = _unghiuri(res)
     lm = res.face_landmarks[0]
     P = np.array([[p.x * W, p.y * H, p.z * W] for p in lm], np.float64)
 
     # 468 şi 473 sunt centrele irisurilor în plasa cu puncte rafinate.
     dip = float(np.hypot(*(P[468, :2] - P[473, :2]))) if len(P) > 473 else \
         float(np.hypot(*(P[33, :2] - P[263, :2])))
+
+    # Pupilele se apropie în imagine când capul e întors, deci scara iese
+    # prea mare. Corecţia e mică în intervalul acceptat, dar e gratuită.
+    dip /= max(np.cos(np.radians(intors)), 0.5)
 
     from scipy.spatial import Delaunay
     tris = Delaunay(P[:, :2]).simplices
@@ -157,7 +188,7 @@ def _plasa_faciala(img: np.ndarray) -> tuple[np.ndarray, float]:
         vals = l0 * p0[2] + l1 * p1[2] + l2 * p2[2]
         bloc = z[y0:y1, x0:x1]
         bloc[m] = vals[m]
-    return -z, dip           # semnul: mai mare = mai aproape
+    return -z, dip, intors, inclinat   # semnul: mai mare = mai aproape
 
 
 def _silueta(img: np.ndarray, cu_gat: bool = False) -> np.ndarray:
@@ -184,13 +215,36 @@ def _monocular(img: np.ndarray) -> np.ndarray:
     return cv2.resize(d, (W, H), interpolation=cv2.INTER_CUBIC).astype(np.float64)
 
 
+def _verifica(intors: float, inclinat: float, latime_cap_mm: float) -> None:
+    """Poza e bună de reconstruit? Spune pe şleau ce anume e greşit.
+
+    Refuzul e mai bun decât un rezultat tăcut şi fals: o poză din trei sferturi
+    trece prin toate modelele fără nicio eroare şi scoate un cap de 33 cm.
+    Omul n-are de unde şti că nu e vina lui -- deci i se spune."""
+    if abs(intors) > UNGHI_MAX:
+        raise PozaNepotrivita(
+            f"Capul e întors cam {abs(intors):.0f}° într-o parte. "
+            "E nevoie de o poză din faţă, privind drept în aparat.")
+    if abs(inclinat) > UNGHI_MAX:
+        sus = "pe spate" if inclinat > 0 else "în piept"
+        raise PozaNepotrivita(
+            f"Bărbia e lăsată {sus} cam {abs(inclinat):.0f}°. "
+            "E nevoie de o poză din faţă, cu privirea la nivelul aparatului.")
+    lo, hi = LATIME_CAP_PLAUZIBILA
+    if not lo <= latime_cap_mm <= hi:
+        raise PozaNepotrivita(
+            f"Din poză iese un cap de {latime_cap_mm:.0f} mm, ceea ce nu e "
+            "plauzibil. Încearcă o poză din faţă, cu tot capul în cadru şi "
+            "faţa neacoperită.")
+
+
 def reconstruieste(bgr: np.ndarray, dip_mm: float = DIP_IMPLICIT_MM,
                    cu_gat: bool = False) -> Reconstructie:
     h, w = bgr.shape[:2]
     img = cv2.resize(bgr, (LAT_LUCRU, int(h * LAT_LUCRU / w)))
     H, W = img.shape[:2]
 
-    mp_z, dip_px = _plasa_faciala(img)
+    mp_z, dip_px, intors, inclinat = _plasa_faciala(img)
     cap = _silueta(img, cu_gat).astype(bool)
     mono = _monocular(img)
 
@@ -227,9 +281,13 @@ def reconstruieste(bgr: np.ndarray, dip_mm: float = DIP_IMPLICIT_MM,
     xs = np.where(cap.any(axis=0))[0]
     ys = np.where(cap.any(axis=1))[0]
     lo, hi = np.percentile(z[cap], [0.5, 99.8])
+    latime_cap_mm = float(np.ptp(xs) * mm_pe_px)
+    _verifica(intors, inclinat, latime_cap_mm)
+
     return Reconstructie(
         baza=baza, detaliu=detaliu, alfa=alfa, cap=cap,
+        intors=round(intors, 1), inclinat=round(inclinat, 1),
         mm_pe_px=mm_pe_px, dip_px=dip_px,
-        latime_cap_mm=float(np.ptp(xs) * mm_pe_px),
+        latime_cap_mm=latime_cap_mm,
         inaltime_cap_mm=float(np.ptp(ys) * mm_pe_px),
         relief_mm=float((hi - lo) * mm_pe_px))

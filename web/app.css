@@ -178,3 +178,7 @@ h3:first-of-type { margin-top: 6px; }
   .container { max-width: 860px; }
   .previz { grid-template-columns: 1.5fr 1fr; }
 }
+
+/* Cerinţele pozei: o listă scurtă, citită înainte de a alege fişierul. */
+.cerinte { margin: .5rem 0 .75rem; padding-left: 1.1rem; }
+.cerinte li { color: var(--mut); font-size: .9rem; line-height: 1.5; }

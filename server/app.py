@@ -88,7 +88,7 @@ async def lucrare_noua(foto: UploadFile = File(...),
 
     try:
         rec = pipeline.reconstruieste(img, dip_mm=dip_mm, cu_gat=cu_gat)
-    except pipeline.FaraFata as e:
+    except (pipeline.FaraFata, pipeline.PozaNepotrivita) as e:
         raise HTTPException(422, str(e))
 
     jid = secrets.token_hex(8)
