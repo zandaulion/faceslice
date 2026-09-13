@@ -324,3 +324,34 @@ h3:first-of-type { margin-top: 6px; }
    grosimii să nu fie o surpriză de după tăiere. */
 .sumar .grosolan { border-color: var(--teracota); }
 .sumar .grosolan .va, .sumar .grosolan .et { color: var(--teracota); }
+
+/* ------------------------------------------------- semnalul de aşteptare
+
+   Nedeterminată dinadins: nu ştiu cât durează felierea, iar o bară cu procente
+   inventate ar fi o minciună politicoasă. Asta spune doar „mai am de lucru". */
+
+.lucreaza-bara {
+  height: 3px; margin: 0 0 10px; border-radius: 2px;
+  background: var(--linie); overflow: hidden;
+}
+.lucreaza-bara[hidden] { display: none; }
+.lucreaza-bara::after {
+  content: ''; display: block; height: 100%; width: 34%;
+  border-radius: 2px; background: var(--salvie);
+  animation: gliseaza 1.05s ease-in-out infinite;
+}
+@keyframes gliseaza {
+  0%   { transform: translateX(-100%); }
+  100% { transform: translateX(330%); }
+}
+
+/* Fără mişcare, semnalul rămâne -- doar că respiră în loc să alerge. */
+@media (prefers-reduced-motion: reduce) {
+  .lucreaza-bara::after { width: 100%; animation: respira 1.6s ease-in-out infinite; }
+  @keyframes respira { 0%, 100% { opacity: 0.35; } 50% { opacity: 1; } }
+}
+
+/* Imaginile se sting puţin cât se recalculează, ca să nu pară că cifrele de
+   dedesubt sunt ale lor. */
+.previz img { transition: opacity 0.18s ease; }
+.lucreaza-bara:not([hidden]) ~ .previz img { opacity: 0.5; }

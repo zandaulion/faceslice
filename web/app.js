@@ -339,6 +339,17 @@ function ecranReglaje() {
     const p = new URLSearchParams({ coala_w: $('#coala-w').value, coala_h: $('#coala-h').value });
     // Link obişnuit: jetonul călătoreşte prin cookie, aşa că descărcarea nu
     // are nevoie de cod care să pună antete.
+    //
+    // Serverul feliază din nou şi aşază plăcile pe coli, ceea ce ia câteva
+    // secunde în care browserul nu arată nimic -- deci butonul o spune el.
+    // Revine singur: nu ştim când începe descărcarea, dar ştim că un buton
+    // rămas mort pentru totdeauna e mai rău decât unul care se redeschide
+    // prea devreme.
+    const b = $('#btn-dxf');
+    const textul = b.textContent;
+    b.disabled = true;
+    b.textContent = 'Pregătesc fişierele…';
+    setTimeout(() => { b.disabled = false; b.textContent = textul; }, 6000);
     location.href = `/api/jobs/${lucrare.id}/dxf?${p}`;
   };
 
@@ -365,6 +376,19 @@ async function previzualizeaza() {
   const aMea = ++nrCerere;
   const sumar = $('#sumar');
   if (sumar) sumar.style.opacity = '0.45';
+
+  // Bara apare abia după o clipă. Un răspuns venit în două sute de
+  // milisecunde ar produce doar o pâlpâire, iar o pâlpâire e mai supărătoare
+  // decât nimic -- semnalul e pentru aşteptare, nu pentru fiecare cerere.
+  const intarziere = setTimeout(() => {
+    const bara = $('#lucreaza');
+    if (bara && aMea === nrCerere) bara.hidden = false;
+  }, 150);
+  const gata = () => {
+    clearTimeout(intarziere);
+    const bara = $('#lucreaza');
+    if (bara && aMea === nrCerere) bara.hidden = true;
+  };
   try {
     const d = await api(`/api/jobs/${lucrare.id}/previzualizare`, {
       method: 'POST', signal: ctl.signal,
@@ -407,6 +431,7 @@ async function previzualizeaza() {
       sumar.style.opacity = '1';
     }
   } finally {
+    gata();
     if (inZbor === ctl) inZbor = null;
   }
 }
