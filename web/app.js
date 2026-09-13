@@ -350,10 +350,19 @@ function cerePrevizualizare() {
   asteapta = setTimeout(previzualizeaza, 180);
 }
 
+/* Numărul cererii, ca un răspuns vechi să nu scrie peste unul nou.
+
+   Anularea opreşte reţeaua, dar nu şi un răspuns deja sosit care tocmai se
+   despachetează -- iar acolo e fereastra în care cifrele rămâneau pe valorile
+   dinainte, deşi cursorul se mişcase. Numărul nu depinde de semantica
+   anulării: dacă între timp a plecat altă cerere, rezultatul acesta se aruncă.*/
+let nrCerere = 0;
+
 async function previzualizeaza() {
   if (inZbor) inZbor.abort();
   const ctl = new AbortController();
   inZbor = ctl;
+  const aMea = ++nrCerere;
   const sumar = $('#sumar');
   if (sumar) sumar.style.opacity = '0.45';
   try {
@@ -362,6 +371,7 @@ async function previzualizeaza() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(citesteReglaje()),
     });
+    if (aMea !== nrCerere) return;          // a plecat alta între timp
     $('#img-asamblat').src = `data:image/png;base64,${d.asamblat}`;
     $('#img-plane').src = `data:image/png;base64,${d.plane}`;
 
@@ -392,7 +402,7 @@ async function previzualizeaza() {
         : '');
     sumar.style.opacity = '1';
   } catch (e) {
-    if (e.name !== 'AbortError' && sumar) {
+    if (e.name !== 'AbortError' && aMea === nrCerere && sumar) {
       sumar.innerHTML = `<div style="grid-column:1/-1" class="eroare">${e.message}</div>`;
       sumar.style.opacity = '1';
     }
