@@ -78,7 +78,7 @@ async def lucrare_noua(foto: UploadFile = File(...),
                        profil_foto: UploadFile | None = File(None),
                        dip_mm: float = Form(pipeline.DIP_IMPLICIT_MM),
                        oglindit: bool = Form(False),
-                       cu_gat: bool = Form(False),
+                       cu_gat: bool = Form(True),
                        dev: dict = Depends(dispozitiv)):
     date = await foto.read()
     if len(date) > MAX_FOTO:

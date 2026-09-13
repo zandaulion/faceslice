@@ -30,6 +30,12 @@ INTRARE_ADANC = 518          # multiplu de 14, cum cere modelul
 # singurul lucru din fotografie a cărui mărime reală se poate afla fără riglă.
 DIP_IMPLICIT_MM = 63.0
 
+# Cât din gât intră în bust, sub bărbie, şi cât de lată e banda păstrată faţă
+# de lăţimea capului. Gâtul unui adult e vreo jumătate din lăţimea capului; 0,62
+# lasă loc pentru maxilar şi muşchii laterali fără să prindă umărul.
+GAT_MM = 45.0
+GAT_LATIME = 0.62
+
 # Cât se amplifică relieful facial peste forma mare.
 #
 # Nu e un număr ales din ochi. Modelul monocular turteşte feţele -- pielea
@@ -206,18 +212,51 @@ def _silueta_bruta(img: np.ndarray) -> np.ndarray:
     return m
 
 
-def _silueta(img: np.ndarray, cu_gat: bool = False) -> np.ndarray:
-    """Capul: păr plus pielea feţei. Gâtul se taie -- un portret se termină la
-    maxilar, altfel primele straturi ar fi numai umeri."""
+def _curata(m: np.ndarray) -> np.ndarray:
+    """Închide golurile şi păstrează doar bucata cea mai mare."""
+    m = cv2.morphologyEx(m.astype(np.uint8), cv2.MORPH_CLOSE, np.ones((15, 15), np.uint8))
+    n, lab, stats, _ = cv2.connectedComponentsWithStats(m)
+    if n > 1:
+        m = (lab == 1 + int(np.argmax(stats[1:, cv2.CC_STAT_AREA]))).astype(np.uint8)
+    return cv2.morphologyEx(m, cv2.MORPH_CLOSE, np.ones((25, 25), np.uint8))
+
+
+def _silueta(img: np.ndarray, cu_gat: bool = True,
+             mm_pe_px: float = 0.3) -> tuple[np.ndarray, np.ndarray]:
+    """Silueta de tăiat, plus capul singur.
+
+    Capul e păr şi pielea feţei. Gâtul e altceva: segmentarea n-are o clasă
+    „gât", ci una „piele de corp", care pe o poză obişnuită prinde şi umerii, şi
+    pieptul -- măsurat, toată lăţimea cadrului şi până la marginea de jos. Luată
+    ca atare, bifa dădea un cap de 278 mm în loc de 137.
+
+    Aşa că se ia doar cât e plauzibil gât: o bandă în jurul axei capului,
+    oprită drept la o adâncime aleasă sub bărbie. Tăietura dreaptă nu e o
+    concesie, e un câştig -- bustul capătă o bază plată şi stă în picioare,
+    ceea ce un cap tăiat la maxilar nu poate.
+
+    Întoarce şi capul singur, fiindcă lăţimea capului se măsoară pe el
+    indiferent de bifă: altfel „lăţimea capului" ar deveni lăţimea umerilor,
+    iar verificarea de plauzibilitate şi-ar pierde rostul."""
     res = MODELE_INST.seg.segment(_mp_image(img))
     cat = np.squeeze(res.category_mask.numpy_view())
-    clase = [1, 3] + ([2] if cu_gat else [])
-    cap = np.isin(cat, clase).astype(np.uint8)
-    cap = cv2.morphologyEx(cap, cv2.MORPH_CLOSE, np.ones((15, 15), np.uint8))
-    n, lab, stats, _ = cv2.connectedComponentsWithStats(cap)
-    if n > 1:
-        cap = (lab == 1 + int(np.argmax(stats[1:, cv2.CC_STAT_AREA]))).astype(np.uint8)
-    return cv2.morphologyEx(cap, cv2.MORPH_CLOSE, np.ones((25, 25), np.uint8))
+    doar_cap = _curata(np.isin(cat, (1, 3))).astype(bool)
+    if not cu_gat or not doar_cap.any():
+        return doar_cap.astype(np.uint8), doar_cap
+
+    ys = np.where(doar_cap.any(axis=1))[0]
+    xs = np.where(doar_cap.any(axis=0))[0]
+    barbie = int(ys.max())
+    taietura = min(barbie + int(GAT_MM / max(mm_pe_px, 1e-6)), img.shape[0] - 1)
+    centru, latime = (xs.min() + xs.max()) / 2.0, float(np.ptp(xs))
+
+    banda = np.zeros_like(doar_cap)
+    lo = max(int(centru - GAT_LATIME * latime / 2), 0)
+    hi = min(int(centru + GAT_LATIME * latime / 2), img.shape[1])
+    banda[:taietura + 1, lo:hi] = True
+
+    gat = (cat == 2) & banda
+    return _curata(doar_cap | gat), doar_cap
 
 
 def _monocular(img: np.ndarray) -> np.ndarray:
@@ -254,13 +293,14 @@ def _verifica(intors: float, inclinat: float, latime_cap_mm: float) -> None:
 
 
 def reconstruieste(bgr: np.ndarray, dip_mm: float = DIP_IMPLICIT_MM,
-                   cu_gat: bool = False) -> Reconstructie:
+                   cu_gat: bool = True) -> Reconstructie:
     h, w = bgr.shape[:2]
     img = cv2.resize(bgr, (LAT_LUCRU, int(h * LAT_LUCRU / w)))
     H, W = img.shape[:2]
 
     mp_z, dip_px, intors, inclinat = _plasa_faciala(img)
-    cap = _silueta(img, cu_gat).astype(bool)
+    cap, doar_cap = _silueta(img, cu_gat, dip_mm / dip_px)
+    cap = cap.astype(bool)
     mono = _monocular(img)
 
     fata = ~np.isnan(mp_z)
@@ -293,8 +333,8 @@ def reconstruieste(bgr: np.ndarray, dip_mm: float = DIP_IMPLICIT_MM,
 
     mm_pe_px = dip_mm / dip_px
     z = np.where(cap, baza + DETALIU_IMPLICIT * alfa * detaliu, np.nan)
-    xs = np.where(cap.any(axis=0))[0]
-    ys = np.where(cap.any(axis=1))[0]
+    xs = np.where(doar_cap.any(axis=0))[0]
+    ys = np.where(doar_cap.any(axis=1))[0]
     lo, hi = np.percentile(z[cap], [0.5, 99.8])
     latime_cap_mm = float(np.ptp(xs) * mm_pe_px)
     _verifica(intors, inclinat, latime_cap_mm)
