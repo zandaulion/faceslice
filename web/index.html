@@ -60,6 +60,19 @@
       </div>
     </label>
 
+    <label class="zona zona-mica" id="zona-profil">
+      <input type="file" id="fisier-profil" accept="image/*" hidden />
+      <div class="zona-int">
+        <div class="zona-ico">📐</div>
+        <div><strong>A doua poză, din profil</strong> <span class="mut mic">— opţional</span></div>
+        <div class="mut mic">capul întors complet într-o parte</div>
+      </div>
+    </label>
+    <p class="mut mic">Din faţă, adâncimea e ghicită, iar cine-o ghiceşte nu ştie
+      cu ce obiectiv ai fotografiat: la 26 mm ţinut aproape nasul iese mărit, la
+      85 mm de departe nu. Din profil, nasul nu mai e ghicit — e o lungime
+      măsurată. Fă-o cu acelaşi telefon, de la aceeaşi distanţă.</p>
+
     <div class="rand">
       <label class="bifa"><input type="checkbox" id="oglindit" />
         <span>Făcută cu camera frontală <span class="mut mic">(se întoarce)</span></span></label>
@@ -94,6 +107,7 @@
       <figure><img id="img-asamblat" alt="Cum arată asamblat" /><figcaption>asamblat</figcaption></figure>
       <figure><img id="img-plane" alt="Unde cad planele de tăiere" /><figcaption>planele de tăiere</figcaption></figure>
     </div>
+    <div id="calibrare" class="nota" hidden></div>
     <div id="sumar" class="sumar"></div>
   </div>
 
@@ -107,7 +121,7 @@
       <input type="range" id="kerf" min="0" max="1.5" step="0.05" value="0.2" /></div>
 
     <div class="cursor"><label>Relieful feţei <b id="v-detaliu">1.5×</b></label>
-      <input type="range" id="detaliu" min="0" max="4" step="0.25" value="1.5" /></div>
+      <input type="range" id="detaliu" min="0" max="4" step="0.05" value="1.5" /></div>
     <p class="mut mic">Modelele de adâncime turtesc feţele. 1,5× e valoarea la care
       nasul iese cât s-a măsurat pe o fotografie din profil; mai sus exagerează,
       ceea ce uneori citeşte mai bine după tăiere.</p>

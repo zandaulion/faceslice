@@ -182,3 +182,14 @@ h3:first-of-type { margin-top: 6px; }
 /* Cerinţele pozei: o listă scurtă, citită înainte de a alege fişierul. */
 .cerinte { margin: .5rem 0 .75rem; padding-left: 1.1rem; }
 .cerinte li { color: var(--mut); font-size: .9rem; line-height: 1.5; }
+
+/* A doua zonă de încărcare: la fel, dar vizibil secundară -- se poate sări. */
+.zona-mica { margin-top: .75rem; padding: .85rem; border-style: dashed; }
+.zona-mica .zona-ico { font-size: 1.5rem; }
+.zona-mica img { max-height: 120px; }
+
+/* Nota de calibrare: spune pe ce se bazează adâncimea, măsurată sau medie. */
+.nota { margin: .75rem 0; padding: .7rem .85rem; border-radius: 10px;
+        background: var(--sus-2); border: 1px solid var(--linie);
+        font-size: .88rem; line-height: 1.55; color: var(--mut); }
+.nota strong { color: var(--text); }

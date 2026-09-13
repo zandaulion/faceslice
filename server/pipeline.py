@@ -191,6 +191,21 @@ def _plasa_faciala(img: np.ndarray) -> tuple[np.ndarray, float, float, float]:
     return -z, dip, intors, inclinat   # semnul: mai mare = mai aproape
 
 
+def _silueta_bruta(img: np.ndarray) -> np.ndarray:
+    """Tot ce e om în cadru: păr, faţă şi piele. Fără curăţenia de portret.
+
+    Pe o poză din profil, segmentarea pune nasul şi bărbia în clasa „corp", nu
+    în „pielea feţei" -- masca de portret le-ar tăia exact pe alea."""
+    res = MODELE_INST.seg.segment(_mp_image(img))
+    cat = np.squeeze(res.category_mask.numpy_view())
+    m = cv2.morphologyEx(np.isin(cat, (1, 2, 3)).astype(np.uint8),
+                         cv2.MORPH_CLOSE, np.ones((15, 15), np.uint8))
+    n, lab, stats, _ = cv2.connectedComponentsWithStats(m)
+    if n > 1:
+        m = (lab == 1 + int(np.argmax(stats[1:, cv2.CC_STAT_AREA]))).astype(np.uint8)
+    return m
+
+
 def _silueta(img: np.ndarray, cu_gat: bool = False) -> np.ndarray:
     """Capul: păr plus pielea feţei. Gâtul se taie -- un portret se termină la
     maxilar, altfel primele straturi ar fi numai umeri."""

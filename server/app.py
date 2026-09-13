@@ -25,6 +25,7 @@ from auth import cod_nou, dispozitiv, doar_admin, revendica
 from db import DB, acum, dosar_job
 import dxf as dxfmod
 import pipeline
+import profil
 import render
 from slicer import Reglaje, Solid
 
@@ -73,6 +74,7 @@ def _citeste_foto(date: bytes) -> np.ndarray:
 
 @app.post("/api/jobs")
 async def lucrare_noua(foto: UploadFile = File(...),
+                       profil_foto: UploadFile | None = File(None),
                        dip_mm: float = Form(pipeline.DIP_IMPLICIT_MM),
                        oglindit: bool = Form(False),
                        cu_gat: bool = Form(False),
@@ -91,6 +93,19 @@ async def lucrare_noua(foto: UploadFile = File(...),
     except (pipeline.FaraFata, pipeline.PozaNepotrivita) as e:
         raise HTTPException(422, str(e))
 
+    # A doua poză, dacă există: din ea se măsoară cât de adânc e relieful
+    # omului acestuia, fotografiat cu aparatul acesta. Fără ea rămâne media.
+    calibrare = None
+    if profil_foto is not None:
+        date_p = await profil_foto.read()
+        if date_p:
+            if len(date_p) > MAX_FOTO:
+                raise HTTPException(413, "A doua fotografie e prea mare.")
+            try:
+                calibrare = profil.calibreaza(rec, _citeste_foto(date_p))
+            except profil.ProfilNepotrivit as e:
+                raise HTTPException(422, str(e))
+
     jid = secrets.token_hex(8)
     d = dosar_job(jid)
     cv2.imwrite(os.path.join(d, "foto.jpg"), img, [cv2.IMWRITE_JPEG_QUALITY, 88])
@@ -100,6 +115,10 @@ async def lucrare_noua(foto: UploadFile = File(...),
                         alfa=rec.alfa.astype(np.float32),
                         cap=rec.cap, mm_pe_px=rec.mm_pe_px)
     rez = rec.rezumat()
+    rez["detaliu"] = calibrare.factor if calibrare else pipeline.DETALIU_IMPLICIT
+    rez["calibrat"] = calibrare is not None
+    if calibrare:
+        rez["calibrare"] = calibrare.rezumat()
     DB.execute("INSERT INTO jobs (id, device_id, created_at, nume, rezumat, reglaje)"
                " VALUES (?,?,?,?,?,?)",
                (jid, dev["id"], acum(), foto.filename or "portret",
@@ -117,7 +136,16 @@ def lucrari(dev: dict = Depends(dispozitiv)):
              "rezumat": json.loads(r["rezumat"] or "{}")} for r in rows]
 
 
-def _incarca(jid: str, dev: dict, detaliu_x: float = pipeline.DETALIU_IMPLICIT):
+def _detaliu_lucrarii(r) -> float:
+    """Amplificarea proprie lucrării: cea măsurată din profil, altfel media."""
+    try:
+        return float(json.loads(r["rezumat"] or "{}").get(
+            "detaliu", pipeline.DETALIU_IMPLICIT))
+    except (TypeError, ValueError):
+        return pipeline.DETALIU_IMPLICIT
+
+
+def _incarca(jid: str, dev: dict, detaliu_x: float | None = None):
     """Adâncimea, recompusă cu amplificarea cerută.
 
     Componentele stau separat pe disc tocmai ca amestecul să fie un reglaj:
@@ -126,6 +154,8 @@ def _incarca(jid: str, dev: dict, detaliu_x: float = pipeline.DETALIU_IMPLICIT):
                    (jid, dev["id"])).fetchone()
     if not r:
         raise HTTPException(404, "Lucrarea nu există.")
+    if detaliu_x is None:
+        detaliu_x = _detaliu_lucrarii(r)
     f = np.load(os.path.join(dosar_job(jid), "relief.npz"))
     cap = f["cap"]
     z = f["baza"].astype(np.float64) + detaliu_x * f["alfa"] * f["detaliu"]
@@ -155,7 +185,8 @@ def _reglaje(d: dict) -> Reglaje:
 @app.post("/api/jobs/{jid}/previzualizare")
 async def previzualizare(jid: str, request: Request, dev: dict = Depends(dispozitiv)):
     d = await request.json()
-    detaliu_x = float(np.clip(float(d.pop("detaliu", pipeline.DETALIU_IMPLICIT)), 0.0, 5.0))
+    cerut = d.pop("detaliu", None)
+    detaliu_x = None if cerut is None else float(np.clip(float(cerut), 0.0, 5.0))
     reg = _reglaje(d)
     _, z, cap, mm = _incarca(jid, dev, detaliu_x)
     placi, info = Solid(z, cap, mm).felieaza(reg)
@@ -186,7 +217,7 @@ def descarca(jid: str, request: Request, coala_w: float = 1000, coala_h: float =
     salvate = json.loads(r0["reglaje"] or "{}") if (r0 := DB.execute(
         "SELECT reglaje FROM jobs WHERE id=? AND device_id=?",
         (jid, dev["id"])).fetchone()) else {}
-    detaliu_x = float(salvate.pop("detaliu", pipeline.DETALIU_IMPLICIT))
+    detaliu_x = salvate.pop("detaliu", None)
     r, z, cap, mm = _incarca(jid, dev, detaliu_x)
     reg = _reglaje(salvate)
     placi, info = Solid(z, cap, mm).felieaza(reg)

@@ -78,6 +78,25 @@ function ecranFoto() {
       `<img src="${u}" alt="" /><div class="mut mic" style="margin-top:8px">${f.name}</div>`;
   };
   fisier.onchange = () => fisier.files[0] && arata(fisier.files[0]);
+
+  // A doua poză: acelaşi tipar, dar fără ea se merge mai departe.
+  const fisierProfil = $('#fisier-profil');
+  const zonaProfil = $('#zona-profil');
+  let alesProfil = null;
+  const arataProfil = (f) => {
+    alesProfil = f;
+    const u = URL.createObjectURL(f);
+    zonaProfil.querySelector('.zona-int').innerHTML =
+      `<img src="${u}" alt="" /><div class="mut mic" style="margin-top:8px">${f.name}</div>`;
+  };
+  fisierProfil.onchange = () => fisierProfil.files[0] && arataProfil(fisierProfil.files[0]);
+  zonaProfil.ondragover = (e) => { e.preventDefault(); zonaProfil.classList.add('activ'); };
+  zonaProfil.ondragleave = () => zonaProfil.classList.remove('activ');
+  zonaProfil.ondrop = (e) => {
+    e.preventDefault(); zonaProfil.classList.remove('activ');
+    const f = e.dataTransfer.files[0];
+    if (f && f.type.startsWith('image/')) arataProfil(f);
+  };
   zona.ondragover = (e) => { e.preventDefault(); zona.classList.add('activ'); };
   zona.ondragleave = () => zona.classList.remove('activ');
   zona.ondrop = (e) => {
@@ -90,13 +109,15 @@ function ecranFoto() {
     if (!ales) return;
     const fd = new FormData();
     fd.append('foto', ales);
+    if (alesProfil) fd.append('profil_foto', alesProfil);
     fd.append('dip_mm', $('#dip').value);
     fd.append('oglindit', $('#oglindit').checked);
     fd.append('cu_gat', $('#cu-gat').checked);
     trimite.disabled = true;
     $('#eroare-foto').textContent = '';
     zona.querySelector('.zona-int').innerHTML =
-      '<div class="lucreaza">Caut faţa, silueta şi adâncimea…</div>';
+      `<div class="lucreaza">Caut faţa, silueta şi adâncimea${
+        alesProfil ? ', apoi măsor nasul din profil' : ''}…</div>`;
     try {
       lucrare = await api('/api/jobs', { method: 'POST', body: fd });
       ecranReglaje();
@@ -147,6 +168,28 @@ function citesteReglaje() {
 function ecranReglaje() {
   pune('#sablon-reglaje');
   $('#btn-inapoi').onclick = ecranFoto;
+
+  // Cursorul de relief porneşte de la ce s-a măsurat pentru omul acesta, dacă
+  // s-a măsurat. Altfel rămâne pe media care nu ştie ce obiectiv a fost.
+  const rez = lucrare?.rezumat || {};
+  if (rez.detaliu) $('#detaliu').value = rez.detaliu;
+  const nota = $('#calibrare');
+  if (rez.calibrat && rez.calibrare) {
+    const c = rez.calibrare;
+    nota.innerHTML =
+      `<strong>Calibrat după poza din profil.</strong> Nasul tău iese ` +
+      `${c.nas_masurat_mm.toFixed(1)} mm; din poza frontală ieşeau ` +
+      `${c.nas_dedus_mm.toFixed(1)} mm, deci relieful se ridică de ` +
+      `${c.factor.toFixed(2)} ori. Valoarea e a ta şi a aparatului cu care ai pozat.`;
+    nota.hidden = false;
+  } else {
+    nota.innerHTML =
+      `<strong>Fără poză din profil.</strong> Adâncimea feţei foloseşte o ` +
+      `valoare medie (${(rez.detaliu || 1.5).toFixed(2)}×), fiindcă dintr-o ` +
+      `singură poză nu se poate şti dacă nasul e mare sau obiectivul a fost ` +
+      `aproape. Reîncarcă adăugând o poză din profil dacă vrei exactitate.`;
+    nota.hidden = false;
+  }
 
   for (const [id, [, fmt]] of Object.entries(CURSOARE)) {
     const el = $(`#${id}`);
