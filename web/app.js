@@ -12,6 +12,10 @@ const $ = (s, r = document) => r.querySelector(s);
 const cheieJeton = 'faceslice-jeton';
 let jeton = localStorage.getItem(cheieJeton) || '';
 let lucrare = null;
+
+/* Lucrările din istoric, după identificator: deschiderea uneia trebuie să
+   ducă mai departe şi reglajele ei, nu doar numărul. */
+const LUCRARI = new Map();
 let inZbor = null;
 let asteapta = null;
 
@@ -176,6 +180,9 @@ function amprenta(j) {
 
 function listaLucrari(l) {
   const gazda = $('#lucrari');
+  // Lucrările se ţin după identificator, ca deschiderea din istoric să ducă
+  // mai departe şi reglajele, nu doar numărul lor de ordine.
+  for (const j of l) LUCRARI.set(j.id, j);
   if (!l.length || !gazda) return;
   gazda.innerHTML = '';
   const d = document.createElement('div');
@@ -201,7 +208,7 @@ function listaLucrari(l) {
 
   d.querySelectorAll('.lista-el').forEach((el) => {
     const id = el.dataset.id;
-    el.querySelector('.el-text').onclick = () => { lucrare = { id }; ecranReglaje(); };
+    el.querySelector('.el-text').onclick = () => { lucrare = LUCRARI.get(id) || { id }; ecranReglaje(); };
     el.querySelectorAll('.btn-ico').forEach((b) => {
       b.onclick = async (e) => {
         e.stopPropagation();
@@ -298,10 +305,32 @@ function ecranReglaje() {
   $('#btn-inapoi').onclick = ecranFoto;
   porneseLupa();
 
-  // Cursorul de relief porneşte de la ce s-a măsurat pentru omul acesta, dacă
-  // s-a măsurat. Altfel rămâne pe media care nu ştie ce obiectiv a fost.
+  // Reglajele lucrării, aşa cum au rămas.
+  //
+  // Se salvau pe server la fiecare previzualizare, dar nimeni nu le citea
+  // înapoi: o lucrare deschisă din istoric pornea de la valorile implicite din
+  // marcaj, deci cifrele din listă spuneau una şi cursoarele alta.
   const rez = lucrare?.rezumat || {};
-  if (rez.detaliu) $('#detaliu').value = rez.detaliu;
+  const reg = lucrare?.reglaje || {};
+  for (const [id, [cheie]] of Object.entries(CURSOARE)) {
+    const v = reg[cheie];
+    if (Number.isFinite(v)) $(`#${id}`).value = v;
+  }
+  if (typeof reg.goleste === 'boolean') $('#goleste').checked = reg.goleste;
+
+  // Relieful: ce ai ales tu, altfel ce s-a măsurat din profil, altfel media.
+  if (!Number.isFinite(reg.detaliu) && Number.isFinite(rez.detaliu)) {
+    $('#detaliu').value = rez.detaliu;
+  }
+
+  // Coala de tablă ţine de stocul tău, nu de portret, deci e aceeaşi pentru
+  // toate lucrările şi stă în browser, nu în lucrare.
+  const coala = JSON.parse(localStorage.getItem('faceslice-coala') || 'null');
+  if (coala) { $('#coala-w').value = coala.w; $('#coala-h').value = coala.h; }
+  for (const id of ['coala-w', 'coala-h']) {
+    $(`#${id}`).onchange = () => localStorage.setItem('faceslice-coala',
+      JSON.stringify({ w: $('#coala-w').value, h: $('#coala-h').value }));
+  }
   const nota = $('#calibrare');
   if (rez.calibrat && rez.calibrare) {
     const c = rez.calibrare;
