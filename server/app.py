@@ -392,9 +392,13 @@ async def _corp(request: Request) -> dict:
 
 @app.get("/api/admin/devices", dependencies=[Depends(doar_admin)])
 def a_dispozitive():
-    return [dict(r) for r in DB.execute(
+    # Învelişul contează: consola citeşte `.devices`, ca la toate celelalte
+    # aplicaţii. Întorcând lista goală-goluţă, ea primea `undefined` şi cădea
+    # cu „Cannot read properties of undefined" -- iar aplicaţia apărea ca şi
+    # cum n-ar răspunde, deşi răspundea 200.
+    return {"devices": [dict(r) for r in DB.execute(
         "SELECT id, label, created_at, last_seen, revoked FROM devices"
-        " ORDER BY created_at DESC")]
+        " ORDER BY created_at DESC")]}
 
 
 @app.post("/api/admin/devices/{did}/revoke", dependencies=[Depends(doar_admin)])
@@ -432,9 +436,9 @@ def a_sterge_dispozitiv(did: str):
 
 @app.get("/api/admin/invites", dependencies=[Depends(doar_admin)])
 def a_invitatii():
-    return [dict(r) for r in DB.execute(
+    return {"invites": [dict(r) for r in DB.execute(
         "SELECT id, code, label, url, created_at, expires_at, used_at, revoked"
-        " FROM invites ORDER BY created_at DESC")]
+        " FROM invites ORDER BY created_at DESC")]}
 
 
 @app.post("/api/admin/invites", dependencies=[Depends(doar_admin)])
@@ -452,7 +456,7 @@ async def a_invitatie(request: Request):
                 d.get("label"), f"{baza}/?code={cod}" if baza else None, acum(), exp))
     DB.commit()
     return {"id": iid, "code": cod, "url": f"{baza}/?code={cod}" if baza else None,
-            "expires_at": exp}
+            "expires_at": exp, "expires_in_days": zile}
 
 
 @app.post("/api/admin/invites/{iid}/revoke", dependencies=[Depends(doar_admin)])
