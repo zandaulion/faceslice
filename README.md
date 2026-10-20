@@ -48,11 +48,19 @@ golit              80% mai puţin material; ce e acoperit nu se vede
                    10 kg oţel plin  →  1,9 kg inele
 ```
 
+## In English
+
+Faceslice turns one frontal portrait into a layered relief and cutting geometry.
+The interface and main guide are in Romanian. It is an experimental fabrication
+tool: verify physical dimensions and cutting constraints before manufacturing.
+The browser uploads a selected portrait to your own server for CPU processing;
+keep that server and its stored jobs private. [Project overview](https://zandaulion.com/faceslice.html).
+
 ## Rulare
 
-```bash
-./deploy.sh                    # construieşte imaginea şi reporneşte serviciul
-```
+Ai nevoie de Podman, `curl` și `openssl`. Imaginea instalează Python 3.13 și
+dependențele; pe calculatorul gazdă nu este necesară instalarea lor manuală.
+Rulează comenzile din rădăcina depozitului. Descarcă modelele **înainte** de build.
 
 Modelele nu sunt în depozit — 114 MB de greutăţi care nu sunt codul nostru.
 Se aşază în `models/`:
@@ -67,7 +75,35 @@ curl -L -o models/depth.onnx \
   https://huggingface.co/onnx-community/depth-anything-v2-small/resolve/main/onnx/model.onnx
 ```
 
-Totul rulează pe procesor: reconstrucţia ia ~2,5 s, o feliere sub o secundă.
+Pornește un exemplar local cu un volum separat pentru date:
+
+```bash
+podman build -t faceslice:local -f deploy/Containerfile .
+export ADMIN_TOKEN="$(openssl rand -hex 32)"
+podman run --rm --name faceslice-demo \
+  -p 127.0.0.1:8000:8000 -v faceslice-demo-data:/data \
+  -e ADMIN_TOKEN -e PUBLIC_BASE_URL=http://127.0.0.1:8000 \
+  -e COOKIE_SECURE=0 -d faceslice:local
+curl --fail http://127.0.0.1:8000/api/health
+curl --fail http://127.0.0.1:8000/api/admin/invites \
+  -H "X-Admin-Token: $ADMIN_TOKEN" -H 'Content-Type: application/json' \
+  --data '{"label":"Demo device"}'
+```
+
+Deschide câmpul `url` întors de ultima comandă și folosește codul invitației.
+`COOKIE_SECURE=0` este numai pentru proba HTTP pe loopback. În producție folosește
+HTTPS, cookie-ul securizat implicit și un secret păstrat într-un fișier privat.
+Nu expune API-ul de administrare pe ruta publică.
+
+`podman stop faceslice-demo` oprește proba; volumul păstrează baza de date și
+fișierele de lucru. Pentru backup, oprește containerul și copiază întregul volum
+într-un loc privat. Nu publica fotografii sau rezultate provenite de la persoane.
+
+`./deploy.sh` reconstruiește imaginea și repornește un serviciu systemd **deja
+instalat**; nu este program de instalare. Configurează unitatea pe gazda ta pornind
+de la aceeași imagine, variabile și volum ca în exemplul de mai sus.
+
+Totul rulează pe procesor: reconstrucția și felierea depind de calculator și imagine.
 
 ## Ce nu face
 
@@ -76,3 +112,12 @@ Totul rulează pe procesor: reconstrucţia ia ~2,5 s, o feliere sub o secundă.
   obiectul e un relief, nu un cap întreg.
 - Nu ştie kerful maşinii tale. Valoarea implicită e o presupunere; întreabă
   atelierul înainte de tăiere.
+
+
+## Support and contributions
+
+Use this repository’s Issues for reproducible bugs and focused feature requests. Include the version, relevant runtime/browser, expected behavior and a minimal synthetic example. Remove credentials, personal records, device identifiers and deployment-specific values before sharing logs or screenshots.
+
+Use synthetic artwork when reporting geometry problems. The code is [MIT-licensed](LICENSE); downloaded models retain their own upstream terms.
+
+Keep changes focused and update the affected documentation. Security-sensitive reports should follow [SECURITY.md](SECURITY.md).
