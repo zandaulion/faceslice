@@ -58,21 +58,20 @@ keep that server and its stored jobs private. [Project overview](https://zandaul
 
 ## Rulare
 
-Ai nevoie de Podman, `curl` și `openssl`. Imaginea instalează Python 3.13 și
-dependențele; pe calculatorul gazdă nu este necesară instalarea lor manuală.
-Rulează comenzile din rădăcina depozitului. Descarcă modelele **înainte** de build.
+Ai nevoie de Podman, Python 3, `curl` și `openssl`. Imaginea instalează Python
+3.13 și dependențele aplicației; Python-ul gazdei descarcă doar modelele.
+Descarcă [arhiva v0.1.0](https://github.com/zandaulion/faceslice/releases/tag/v0.1.0)
+și verifică fișierul `SHA256SUMS` din release, sau clonează codul sursă.
+Rulează comenzile din rădăcina proiectului. Descarcă modelele **înainte** de build.
 
-Modelele nu sunt în depozit — 114 MB de greutăţi care nu sunt codul nostru.
-Se aşază în `models/`:
+Modelele nu sunt în arhivă sau depozit — aproximativ 114 MB de fișiere terțe.
+Scriptul le descarcă de la sursele indicate în
+[notificările pentru terți](THIRD_PARTY_NOTICES.md), verifică SHA-256 pentru
+fiecare și le așază în `models/`. Dacă sursa schimbă un model, verificarea se
+oprește înainte de build:
 
 ```bash
-mkdir -p models
-curl -L -o models/face_landmarker.task \
-  https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task
-curl -L -o models/selfie_multiclass.tflite \
-  https://storage.googleapis.com/mediapipe-models/image_segmenter/selfie_multiclass_256x256/float32/latest/selfie_multiclass_256x256.tflite
-curl -L -o models/depth.onnx \
-  https://huggingface.co/onnx-community/depth-anything-v2-small/resolve/main/onnx/model.onnx
+python3 scripts/download-models.py
 ```
 
 Pornește un exemplar local cu un volum separat pentru date:
@@ -91,6 +90,10 @@ curl --fail http://127.0.0.1:8000/api/admin/invites \
 ```
 
 Deschide câmpul `url` întors de ultima comandă și folosește codul invitației.
+După activare, poți încărca [portretul de test complet sintetic](examples/synthetic-portrait.png)
+pentru a verifica reconstrucția, previzualizarea și exportul DXF fără datele
+unei persoane reale. Imaginea este un exemplu de test, nu o garanție că o
+fotografie sau o piesă tăiată va avea dimensiuni corecte.
 `COOKIE_SECURE=0` este numai pentru proba HTTP pe loopback. În producție folosește
 HTTPS, cookie-ul securizat implicit și un secret păstrat într-un fișier privat.
 Nu expune API-ul de administrare pe ruta publică.
@@ -118,6 +121,8 @@ Totul rulează pe procesor: reconstrucția și felierea depind de calculator și
 
 Use this repository’s Issues for reproducible bugs and focused feature requests. Include the version, relevant runtime/browser, expected behavior and a minimal synthetic example. Remove credentials, personal records, device identifiers and deployment-specific values before sharing logs or screenshots.
 
-Use synthetic artwork when reporting geometry problems. The code is [MIT-licensed](LICENSE); downloaded models retain their own upstream terms.
+Use synthetic artwork when reporting geometry problems. Original Faceslice code
+and documentation are [GPL-3.0-or-later](LICENSE). Downloaded models and Python
+packages retain their own upstream terms; see [third-party notices](THIRD_PARTY_NOTICES.md).
 
 Keep changes focused and update the affected documentation. Security-sensitive reports should follow [SECURITY.md](SECURITY.md).

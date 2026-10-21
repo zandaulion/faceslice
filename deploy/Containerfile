@@ -20,12 +20,13 @@ COPY requirements.txt .
 # nici nu porneşte.
 RUN pip install --no-cache-dir -r requirements.txt \
  && pip uninstall -y opencv-contrib-python \
- && pip install --no-cache-dir --force-reinstall opencv-contrib-python-headless==5.0.0.93 \
+ && pip install --no-cache-dir --no-deps --force-reinstall opencv-contrib-python-headless==5.0.0.93 \
  && python -c "import cv2, mediapipe, onnxruntime, scipy; print('import ok')"
 
 # Modelele intră în imagine, nu pe volum: sunt cod, nu datele cuiva, iar o
 # imagine care şi le descarcă la pornire nu mai e reproductibilă.
 COPY models ./models
+RUN chmod -R a+rX ./models
 COPY server ./server
 COPY web ./web
 
