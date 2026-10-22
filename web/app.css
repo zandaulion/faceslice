@@ -10,6 +10,7 @@
   --linie: #DED5C4;
   --linie-tare: #C6BBA6;
   --salvie: #4E6A57;
+  --pe-salvie: #FFFFFF;
   --salvie-clar: #6B8A74;
   --teracota: #C97F5F;
   --umbra: 0 2px 10px rgba(70, 58, 44, 0.07);
@@ -27,6 +28,7 @@
     --linie: #2F353A;
     --linie-tare: #434B52;
     --salvie: #7FA98B;
+    --pe-salvie: #16271B;
     --salvie-clar: #9BBFA4;
     --teracota: #D89475;
     --umbra: 0 2px 12px rgba(0, 0, 0, 0.35);
@@ -88,7 +90,7 @@ h3:first-of-type { margin-top: 6px; }
   background: var(--sus-2); color: var(--text);
   transition: opacity 0.15s ease;
 }
-.btn-primar { background: var(--salvie); color: #FFF; }
+.btn-primar { background: var(--salvie); color: var(--pe-salvie); }
 .btn:disabled { opacity: 0.45; cursor: default; }
 .btn-mic { width: auto; margin: 0; padding: 6px 12px; font-size: 0.82rem;
            background: var(--sus-2); border: 1px solid var(--linie); }
