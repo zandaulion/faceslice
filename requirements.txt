@@ -1,9 +1,9 @@
-fastapi==0.162.0
+fastapi==0.163.1
 uvicorn[standard]==0.54.0
-python-multipart==0.0.32
-numpy==2.5.4
+python-multipart==0.0.34
+numpy==2.5.5
 scipy==1.18.1
 opencv-contrib-python-headless==5.0.0.93
-mediapipe==1.1.1
-onnxruntime==1.31.1
+mediapipe==1.2.3
+onnxruntime==1.32.0
 matplotlib==3.11.2
